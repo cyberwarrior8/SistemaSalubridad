@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { getPool, sql } from '../lib/db.js';
+import { getPool, sql, getPasswordColumnName } from '../lib/db.js';
 
 const router = Router();
 
@@ -18,10 +18,11 @@ router.post(
 
     try {
       const pool = await getPool();
+      const pwdCol = await getPasswordColumnName(pool);
       const userResult = await pool
         .request()
         .input('correo', sql.NVarChar(100), correo)
-        .query('SELECT TOP 1 id_usuario, nombre, correo, [contraseña_hash] AS password_hash, estado FROM Usuario WHERE correo = @correo');
+        .query(`SELECT TOP 1 id_usuario, nombre, correo, [${pwdCol}] AS password_hash, estado FROM Usuario WHERE correo = @correo`);
 
       const user = userResult.recordset[0];
       if (!user || user.estado === false || user.estado === 0) {

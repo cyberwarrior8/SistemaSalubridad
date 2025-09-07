@@ -41,3 +41,15 @@ export async function getPool() {
 }
 
 export { sql };
+
+// Detect the actual password column name in dbo.Usuario: 'contraseña_hash' or 'contrasena_hash'
+let cachedPwdColName = null;
+export async function getPasswordColumnName(pool = null) {
+  if (cachedPwdColName) return cachedPwdColName;
+  const p = pool || (await getPool());
+  const q = `SELECT name FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Usuario') AND name IN (N'contraseña_hash', N'contrasena_hash')`;
+  const rs = await p.request().query(q);
+  const name = rs.recordset[0]?.name;
+  cachedPwdColName = name || 'contrasena_hash';
+  return cachedPwdColName;
+}

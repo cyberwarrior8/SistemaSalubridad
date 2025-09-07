@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import bcrypt from 'bcrypt';
-import { getPool, sql } from '../lib/db.js';
+import { getPool, sql, getPasswordColumnName } from '../lib/db.js';
 
 dotenv.config();
 
@@ -16,13 +16,21 @@ async function ensureUser(pool, { nombre, correo, password, roles }) {
   const rounds = parseInt(process.env.BCRYPT_ROUNDS || '10', 10);
   const hash = await bcrypt.hash(password, rounds);
 
-  // Insert user if not exists
-  const userResult = await pool
-    .request()
-    .input('correo', sql.NVarChar(100), correo)
-    .query(`IF NOT EXISTS (SELECT 1 FROM Usuario WHERE correo = @correo)
-              INSERT INTO Usuario (nombre, correo, [contraseña_hash], estado) VALUES (N'${nombre.replace(/'/g, "''")}', @correo, N'${hash.replace(/'/g, "''")}', 1);
-            SELECT id_usuario FROM Usuario WHERE correo = @correo;`);
+  const pwdCol = await getPasswordColumnName(pool);
+
+  // Insert user if not exists (parameterized)
+  const req = pool.request();
+  req.input('correo', sql.NVarChar(100), correo);
+  req.input('nombre', sql.NVarChar(100), nombre);
+  req.input('hash', sql.NVarChar(255), hash);
+  const userResult = await req.query(`
+    IF NOT EXISTS (SELECT 1 FROM Usuario WHERE correo = @correo)
+      BEGIN
+        INSERT INTO Usuario (nombre, correo, [${pwdCol}], estado)
+        VALUES (@nombre, @correo, @hash, 1);
+      END
+    SELECT id_usuario FROM Usuario WHERE correo = @correo;
+  `);
   const idUsuario = userResult.recordset[0].id_usuario;
 
   // Map roles
