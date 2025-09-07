@@ -7,6 +7,9 @@ export default function RegistroDatos() {
   const [solicitantes, setSolicitantes] = useState([])
   const [buscar, setBuscar] = useState('')
   const [msg, setMsg] = useState('')
+  const [msgType, setMsgType] = useState('') // 'success' | 'error'
+  const [loadingMuestra, setLoadingMuestra] = useState(false)
+  const [loadingSolicitante, setLoadingSolicitante] = useState(false)
 
   async function cargarSolicitantes() {
     const { data } = await api.get('/api/solicitantes')
@@ -26,22 +29,85 @@ export default function RegistroDatos() {
   async function crearSolicitante(e) {
     e.preventDefault()
     setMsg('')
-    await api.post('/api/solicitantes', sol)
-    setMsg('Solicitante creado')
-    setSol({ nombre: '', direccion: '', contacto: '' })
-    await cargarSolicitantes()
+    setMsgType('')
+    setLoadingSolicitante(true)
+    try {
+      await api.post('/api/solicitantes', sol)
+      setMsg('Solicitante creado')
+      setMsgType('success')
+      setSol({ nombre: '', direccion: '', contacto: '' })
+      await cargarSolicitantes()
+    } catch (err) {
+      const status = err?.response?.status
+      const errors = err?.response?.data?.errors
+      const message = err?.response?.data?.message
+      const details = err?.response?.data?.details
+      if (status === 400 && Array.isArray(errors)) {
+        setMsg(errors.map(e => `${e.path}: ${e.msg}`).join(' | '))
+      } else if (status === 403) {
+        setMsg('No tiene permisos para registrar solicitantes')
+      } else {
+        setMsg(message || 'No se pudo registrar el solicitante')
+      }
+      setMsgType('error')
+    } finally {
+      setLoadingSolicitante(false)
+    }
   }
 
   async function crearMuestra(e) {
     e.preventDefault()
     setMsg('')
-    if (!muestra.id_solicitante) {
-      setMsg('Seleccione un solicitante')
+    setMsgType('')
+    // Client-side validations
+    if (!muestra.codigo || muestra.codigo.trim().length < 3) {
+      setMsg('El código debe tener al menos 3 caracteres')
+      setMsgType('error')
       return
     }
-    await api.post('/api/muestras', { ...muestra, id_solicitante: parseInt(muestra.id_solicitante, 10) })
-    setMsg('Muestra creada')
-    setMuestra({ codigo: '', tipo: 'Agua', fecha: '', hora: '', origen: '', condiciones: '', id_solicitante: '' })
+    if (!['Agua','Alimento','Bebida'].includes(muestra.tipo)) {
+      setMsg('Seleccione un tipo de muestra válido')
+      setMsgType('error')
+      return
+    }
+    if (!muestra.fecha) {
+      setMsg('Seleccione una fecha')
+      setMsgType('error')
+      return
+    }
+    if (!muestra.hora) {
+      setMsg('Seleccione una hora')
+      setMsgType('error')
+      return
+    }
+    if (!muestra.id_solicitante) {
+      setMsg('Seleccione un solicitante')
+      setMsgType('error')
+      return
+    }
+    setLoadingMuestra(true)
+    try {
+      await api.post('/api/muestras', { ...muestra, id_solicitante: parseInt(muestra.id_solicitante, 10) })
+      setMsg('Muestra creada correctamente')
+      setMsgType('success')
+      setMuestra({ codigo: '', tipo: 'Agua', fecha: '', hora: '', origen: '', condiciones: '', id_solicitante: '' })
+    } catch (err) {
+      const status = err?.response?.status
+      const errors = err?.response?.data?.errors
+      const message = err?.response?.data?.message
+      if (status === 400 && Array.isArray(errors)) {
+        setMsg(errors.map(e => `${e.path}: ${e.msg}`).join(' | '))
+      } else if (status === 403) {
+        setMsg('No tiene permisos para registrar muestras')
+      } else if (status === 409) {
+        setMsg('El código de muestra ya existe')
+      } else {
+        setMsg([message || 'No se pudo registrar la muestra', details].filter(Boolean).join(' - '))
+      }
+      setMsgType('error')
+    } finally {
+      setLoadingMuestra(false)
+    }
   }
 
   return (
@@ -79,9 +145,20 @@ export default function RegistroDatos() {
             ))}
           </select>
         </div>
-  <button disabled={!muestra.id_solicitante}>Crear Muestra</button>
+        <button disabled={!muestra.id_solicitante || loadingMuestra}>{loadingMuestra ? 'Creando…' : 'Crear Muestra'}</button>
       </form>
-      {msg && <div>{msg}</div>}
+      {msg && (
+        <div role="alert" style={{
+          marginTop: 8,
+          padding: 8,
+          borderRadius: 4,
+          color: msgType === 'error' ? '#7a1111' : '#0f5132',
+          background: msgType === 'error' ? '#f8d7da' : '#d1e7dd',
+          border: `1px solid ${msgType === 'error' ? '#f5c2c7' : '#badbcc'}`
+        }}>
+          {msg}
+        </div>
+      )}
     </div>
   )
 }

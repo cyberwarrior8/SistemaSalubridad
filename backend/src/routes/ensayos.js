@@ -40,7 +40,30 @@ router.get('/muestras/:id/parametros', authRequired, requireRoles('Evaluador'), 
     const tipoRs = await pool.request().input('id', sql.Int, id).query('SELECT tipo FROM Muestra WHERE id_muestra = @id');
     const tipo = tipoRs.recordset[0]?.tipo;
     if (!tipo) return res.status(404).json({ message: 'Muestra no encontrada' });
-    const prs = await pool.request().input('tipo', sql.NVarChar(50), tipo).query('SELECT * FROM Parametro WHERE tipo_muestra = @tipo ORDER BY id_parametro');
+
+    // Preferir parámetros asignados específicamente
+    const asignados = await pool.request().input('id_muestra', sql.Int, id).query(`
+      SELECT p.*, pn.operador, pn.limite_minimo, pn.limite_maximo, nr.descripcion AS norma_descripcion, nr.fuente AS norma_fuente
+      FROM MuestraParametroAsignado a
+      JOIN Parametro p ON p.id_parametro = a.id_parametro
+      LEFT JOIN ParametroNorma pn ON pn.id_parametro = p.id_parametro
+      LEFT JOIN NormaReferencia nr ON nr.id_norma = pn.id_norma AND (nr.tipo_muestra = p.tipo_muestra OR nr.tipo_muestra IS NULL)
+      WHERE a.id_muestra = @id_muestra
+      ORDER BY p.id_parametro;
+    `);
+    if (asignados.recordset.length > 0) {
+      return res.json(asignados.recordset);
+    }
+
+    // Si no hay asignados, devolver por tipo de muestra
+    const prs = await pool.request().input('tipo', sql.NVarChar(50), tipo).query(`
+      SELECT p.*, pn.operador, pn.limite_minimo, pn.limite_maximo, nr.descripcion AS norma_descripcion, nr.fuente AS norma_fuente
+      FROM Parametro p
+      LEFT JOIN ParametroNorma pn ON pn.id_parametro = p.id_parametro
+      LEFT JOIN NormaReferencia nr ON nr.id_norma = pn.id_norma AND (nr.tipo_muestra = p.tipo_muestra OR nr.tipo_muestra IS NULL)
+      WHERE p.tipo_muestra = @tipo
+      ORDER BY p.id_parametro;
+    `);
     res.json(prs.recordset);
   } catch (err) {
     console.error(err);
@@ -88,11 +111,13 @@ router.post(
   authRequired,
   requireRoles('Evaluador'),
   param('id').isInt(),
+  body('apto').isBoolean(),
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
     const id_muestra = parseInt(req.params.id, 10);
     const id_evaluador = req.user.sub;
+    const apto = !!req.body.apto;
 
     try {
       const pool = await getPool();
@@ -101,10 +126,8 @@ router.post(
         .request()
         .input('id_muestra', sql.Int, id_muestra)
   .query(`SELECT e.*, p.nombre FROM Ensayo e JOIN Parametro p ON p.id_parametro = e.id_parametro WHERE e.id_muestra = @id_muestra ORDER BY e.id_ensayo`);
-      const ensayos = eRs.recordset;
-      if (ensayos.length === 0) return res.status(400).json({ message: 'No hay ensayos registrados para esta muestra' });
-
-      const apto = ensayos.every(x => x.dentro_norma);
+  const ensayos = eRs.recordset;
+  if (ensayos.length === 0) return res.status(400).json({ message: 'No hay ensayos registrados para esta muestra' });
 
       const uploadsDir = path.resolve(process.cwd(), 'uploads');
       if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
@@ -119,7 +142,7 @@ router.post(
         doc.fontSize(12).text(`Muestra: ${id_muestra}`);
         doc.text(`Evaluador: ${id_evaluador}`);
         doc.moveDown();
-        doc.text(`Resultado: ${apto ? 'APTO' : 'NO APTO'}`);
+  doc.text(`Resultado: ${apto ? 'APTO' : 'NO APTO'}`);
         doc.moveDown();
         doc.text('Parámetros:', { underline: true });
         ensayos.forEach((e) => {
@@ -144,7 +167,7 @@ router.post(
         .input('id_muestra', sql.Int, id_muestra)
         .query(`UPDATE Muestra SET estado_actual = N'Evaluada' WHERE id_muestra = @id_muestra`);
 
-      res.json({ message: 'Evaluación completada', apto, ruta_pdf });
+  res.json({ message: 'Evaluación completada', apto, ruta_pdf });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Error completando evaluación' });

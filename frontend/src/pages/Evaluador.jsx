@@ -7,6 +7,7 @@ export default function Evaluador() {
   const [parametros, setParametros] = useState([])
   const [resultados, setResultados] = useState({}) // key: id_parametro => { resultado, dentro_norma }
   const [msg, setMsg] = useState('')
+  const [apto, setApto] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -21,6 +22,7 @@ export default function Evaluador() {
     setParametros(data)
     setResultados({})
     setMsg('')
+  setApto(false)
   }
 
   async function guardarParametro(id_parametro) {
@@ -37,7 +39,11 @@ export default function Evaluador() {
 
   async function completarEvaluacion() {
     if (!seleccion) return
-    await api.post(`/api/ensayos/muestras/${seleccion.id_muestra}/completar`)
+    if (!apto) {
+      setMsg('Debe marcar "Apto Para Consumo" para completar')
+      return
+    }
+    await api.post(`/api/ensayos/muestras/${seleccion.id_muestra}/completar`, { apto })
     setMsg('Evaluación completada')
   }
 
@@ -63,7 +69,21 @@ export default function Evaluador() {
             <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
         {parametros.map(p => (
                 <div key={p.id_parametro} style={{ border: '1px solid #ddd', padding: 8 }}>
-          <div><strong>{p.nombre || `Parámetro ${p.id_parametro}`}</strong></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+            <div><strong>{p.nombre || `Parámetro ${p.id_parametro}`}</strong></div>
+            <div style={{ fontSize: 12, color: '#555', textAlign: 'right' }}>
+              {p.operador && (p.limite_minimo != null || p.limite_maximo != null) ? (
+                <div>
+                  Norma: {p.operador}
+                  {p.limite_minimo != null ? ` ${p.limite_minimo}` : ''}
+                  {p.limite_maximo != null ? ` - ${p.limite_maximo}` : ''}
+                  {p.unidad ? ` ${p.unidad}` : ''}
+                </div>
+              ) : null}
+              {p.norma_descripcion ? <div>{p.norma_descripcion}</div> : null}
+              {p.norma_fuente ? <div>Fuente: {p.norma_fuente}</div> : null}
+            </div>
+          </div>
                   <input placeholder="Resultado" value={resultados[p.id_parametro]?.resultado || ''}
                     onChange={e => setResultados({ ...resultados, [p.id_parametro]: { ...(resultados[p.id_parametro] || {}), resultado: e.target.value } })} />
                   <label>
@@ -75,6 +95,9 @@ export default function Evaluador() {
               ))}
             </div>
             <div style={{ marginTop: 16 }}>
+              <label style={{ marginRight: 12 }}>
+                <input type="checkbox" checked={apto} onChange={e => setApto(e.target.checked)} /> Apto Para Consumo
+              </label>
               <button onClick={completarEvaluacion}>Evaluación completa</button>
             </div>
           </>
