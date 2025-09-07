@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import api from '../lib/api'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 
 export default function Login() {
   const { login } = useAuth()
+  const navigate = useNavigate()
   const [correo, setCorreo] = useState('registrador@example.com')
   const [password, setPassword] = useState('Password!123')
   const [error, setError] = useState(null)
@@ -13,7 +15,8 @@ export default function Login() {
     setError(null)
     try {
       const { data } = await api.post('/api/auth/login', { correo, password })
-      login(data.token)
+  login(data.token)
+  navigate('/')
     } catch (err) {
       setError(err.response?.data?.message || 'Error')
     }

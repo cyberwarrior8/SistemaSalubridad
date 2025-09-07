@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import jwtDecode from 'jwt-decode'
+import { jwtDecode } from 'jwt-decode'
 
 const AuthCtx = createContext(null)
 
@@ -7,13 +7,24 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('token'))
   const [user, setUser] = useState(() => {
     const t = localStorage.getItem('token')
-    return t ? jwtDecode(t) : null
+    if (!t) return null
+    try {
+      return jwtDecode(t)
+    } catch {
+      // token inválido o corrupto
+      localStorage.removeItem('token')
+      return null
+    }
   })
 
   function login(t) {
     localStorage.setItem('token', t)
     setToken(t)
-    setUser(jwtDecode(t))
+    try {
+      setUser(jwtDecode(t))
+    } catch {
+      setUser(null)
+    }
   }
 
   function logout() {

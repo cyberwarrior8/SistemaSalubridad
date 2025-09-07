@@ -42,7 +42,8 @@ export default function App() {
         <Route path="/registro" element={<ProtectedRoute roles={["Registro de Datos"]}><RegistroDatos /></ProtectedRoute>} />
         <Route path="/evaluador" element={<ProtectedRoute roles={["Evaluador"]}><Evaluador /></ProtectedRoute>} />
         <Route path="/validacion" element={<ProtectedRoute roles={["Validacion"]}><Validacion /></ProtectedRoute>} />
-        <Route path="/" element={<div>Bienvenido al Sistema de Salubridad</div>} />
+        <Route path="/" element={<div style={{ padding: 16 }}>Bienvenido al Sistema de Salubridad</div>} />
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </AuthProvider>
   )
