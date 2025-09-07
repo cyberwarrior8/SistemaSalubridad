@@ -289,6 +289,99 @@ IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_pa
     INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
     VALUES (@pid, @id_norma_bebida, N'=', 0, 0);
 
+-- =============================================================
+-- Normativas adicionales (orientativas) para parámetros faltantes
+-- Nota: Donde no exista estándar cuantitativo o dependa del producto,
+--       el parámetro se deja sin límite por defecto.
+-- =============================================================
+
+-- Agua (adicionales)
+-- Conductividad: <= 1500 µS/cm (criterio estético/aceptabilidad)
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Conductividad' AND tipo_muestra = N'Agua';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_agua)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_agua, N'<=', NULL, 1500);
+
+-- Color: <= 15 UCV (criterio estético)
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Color' AND tipo_muestra = N'Agua';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_agua)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_agua, N'<=', NULL, 15);
+
+-- Dureza total (como CaCO3): <= 500 mg/L (criterio estético)
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Dureza total (como CaCO3)' AND tipo_muestra = N'Agua';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_agua)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_agua, N'<=', NULL, 500);
+
+-- Alcalinidad total (como CaCO3): 20 - 200 mg/L (rango típico aceptable)
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Alcalinidad total (como CaCO3)' AND tipo_muestra = N'Agua';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_agua)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_agua, N'BETWEEN', 20, 200);
+
+-- Recuento de Aerobios Mesófilos: <= 100 UFC/mL (control de calidad, no sanitario)
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Recuento de Aerobios Mesófilos' AND tipo_muestra = N'Agua';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_agua)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_agua, N'<=', NULL, 100);
+
+-- Nota: Olor, Sabor, Oxígeno Disuelto, DBO5, DQO no poseen límites sanitarios universales en agua potable.
+
+-- Alimentos (adicionales, guía microbiológica orientativa)
+-- Coliformes totales: <= 10^2 - 10^3 UFC/g (se usa 10^2 como meta prudente)
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Coliformes totales' AND tipo_muestra = N'Alimento';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_alimento)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_alimento, N'<=', NULL, 100);
+
+-- Coliformes fecales: <= 10 UFC/g
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Coliformes fecales' AND tipo_muestra = N'Alimento';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_alimento)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_alimento, N'<=', NULL, 10);
+
+-- Mohos y levaduras: <= 10^3 UFC/g
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Mohos y levaduras' AND tipo_muestra = N'Alimento';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_alimento)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_alimento, N'<=', NULL, 1000);
+
+-- Staphylococcus aureus: <= 10^2 UFC/g
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Staphylococcus aureus' AND tipo_muestra = N'Alimento';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_alimento)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_alimento, N'<=', NULL, 100);
+
+-- Bacillus cereus: <= 10^2 UFC/g
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Bacillus cereus' AND tipo_muestra = N'Alimento';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_alimento)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_alimento, N'<=', NULL, 100);
+
+-- Clostridium perfringens: <= 10^2 UFC/g
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Clostridium perfringens' AND tipo_muestra = N'Alimento';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_alimento)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_alimento, N'<=', NULL, 100);
+
+-- Nota: Parámetros fisicoquímicos (humedad, proteína, grasa, etc.) dependen del producto; no se fijan límites genéricos.
+
+-- Bebidas alcohólicas (adicionales, orientativo de calidad microbiológica)
+-- Mohos y levaduras: <= 10 UFC/mL
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Mohos y levaduras' AND tipo_muestra = N'Bebida';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_bebida)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_bebida, N'<=', NULL, 10);
+
+-- Recuento de Aerobios Mesófilos: <= 100 UFC/mL
+SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Recuento de Aerobios Mesófilos' AND tipo_muestra = N'Bebida';
+IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_bebida)
+    INSERT INTO dbo.ParametroNorma (id_parametro, id_norma, operador, limite_minimo, limite_maximo)
+    VALUES (@pid, @id_norma_bebida, N'<=', NULL, 100);
+
+-- Nota: Límites químicos (metanol, SO2, congéneres, etc.) dependen del tipo de bebida (vino, cerveza, ron, etc.).
+
 -- Coliformes totales: = 0 NMP/100 mL
 SELECT @pid = id_parametro FROM dbo.Parametro WHERE nombre = N'Coliformes totales' AND tipo_muestra = N'Bebida';
 IF @pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.ParametroNorma WHERE id_parametro = @pid AND id_norma = @id_norma_bebida)

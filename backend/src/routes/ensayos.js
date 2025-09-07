@@ -43,11 +43,24 @@ router.get('/muestras/:id/parametros', authRequired, requireRoles('Evaluador'), 
 
     // Preferir parámetros asignados específicamente
     const asignados = await pool.request().input('id_muestra', sql.Int, id).query(`
-      SELECT p.*, pn.operador, pn.limite_minimo, pn.limite_maximo, nr.descripcion AS norma_descripcion, nr.fuente AS norma_fuente
+      SELECT p.*,
+             pn.operador,
+             pn.limite_minimo,
+             pn.limite_maximo,
+             nr.descripcion AS norma_descripcion,
+             nr.fuente AS norma_fuente,
+             lastE.resultado AS resultado_guardado,
+             lastE.dentro_norma AS dentro_norma_guardado
       FROM MuestraParametroAsignado a
       JOIN Parametro p ON p.id_parametro = a.id_parametro
       LEFT JOIN ParametroNorma pn ON pn.id_parametro = p.id_parametro
       LEFT JOIN NormaReferencia nr ON nr.id_norma = pn.id_norma AND (nr.tipo_muestra = p.tipo_muestra OR nr.tipo_muestra IS NULL)
+      OUTER APPLY (
+        SELECT TOP 1 e.resultado, e.dentro_norma
+        FROM Ensayo e
+        WHERE e.id_muestra = @id_muestra AND e.id_parametro = p.id_parametro
+        ORDER BY e.id_ensayo DESC
+      ) lastE
       WHERE a.id_muestra = @id_muestra
       ORDER BY p.id_parametro;
     `);
@@ -56,14 +69,31 @@ router.get('/muestras/:id/parametros', authRequired, requireRoles('Evaluador'), 
     }
 
     // Si no hay asignados, devolver por tipo de muestra
-    const prs = await pool.request().input('tipo', sql.NVarChar(50), tipo).query(`
-      SELECT p.*, pn.operador, pn.limite_minimo, pn.limite_maximo, nr.descripcion AS norma_descripcion, nr.fuente AS norma_fuente
-      FROM Parametro p
-      LEFT JOIN ParametroNorma pn ON pn.id_parametro = p.id_parametro
-      LEFT JOIN NormaReferencia nr ON nr.id_norma = pn.id_norma AND (nr.tipo_muestra = p.tipo_muestra OR nr.tipo_muestra IS NULL)
-      WHERE p.tipo_muestra = @tipo
-      ORDER BY p.id_parametro;
-    `);
+    const prs = await pool
+      .request()
+      .input('tipo', sql.NVarChar(50), tipo)
+      .input('id_muestra', sql.Int, id)
+      .query(`
+        SELECT p.*,
+               pn.operador,
+               pn.limite_minimo,
+               pn.limite_maximo,
+               nr.descripcion AS norma_descripcion,
+               nr.fuente AS norma_fuente,
+               lastE.resultado AS resultado_guardado,
+               lastE.dentro_norma AS dentro_norma_guardado
+        FROM Parametro p
+        LEFT JOIN ParametroNorma pn ON pn.id_parametro = p.id_parametro
+        LEFT JOIN NormaReferencia nr ON nr.id_norma = pn.id_norma AND (nr.tipo_muestra = p.tipo_muestra OR nr.tipo_muestra IS NULL)
+        OUTER APPLY (
+          SELECT TOP 1 e.resultado, e.dentro_norma
+          FROM Ensayo e
+          WHERE e.id_muestra = @id_muestra AND e.id_parametro = p.id_parametro
+          ORDER BY e.id_ensayo DESC
+        ) lastE
+        WHERE p.tipo_muestra = @tipo
+        ORDER BY p.id_parametro;
+      `);
     res.json(prs.recordset);
   } catch (err) {
     console.error(err);
@@ -101,6 +131,40 @@ router.post(
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Error registrando ensayo' });
+    }
+  }
+);
+
+// Ensayos guardados por muestra (último por parámetro)
+router.get(
+  '/muestras/:id/ensayos',
+  authRequired,
+  requireRoles('Evaluador'),
+  param('id').isInt(),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const id_muestra = parseInt(req.params.id, 10);
+    try {
+      const pool = await getPool();
+      const rs = await pool
+        .request()
+        .input('id_muestra', sql.Int, id_muestra)
+        .query(`
+          SELECT p.id_parametro, p.nombre, e.resultado, e.dentro_norma, e.fecha_registro
+          FROM Parametro p
+          OUTER APPLY (
+            SELECT TOP 1 e.* FROM Ensayo e
+            WHERE e.id_muestra = @id_muestra AND e.id_parametro = p.id_parametro
+            ORDER BY e.id_ensayo DESC
+          ) e
+          WHERE e.id_ensayo IS NOT NULL
+          ORDER BY p.id_parametro;
+        `);
+      res.json(rs.recordset);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Error obteniendo ensayos' });
     }
   }
 );

@@ -20,20 +20,35 @@ export default function Evaluador() {
     setSeleccion(asignadas.find(m => m.id_muestra === id_muestra) || null)
     const { data } = await api.get(`/api/ensayos/muestras/${id_muestra}/parametros`)
     setParametros(data)
-    setResultados({})
+    // Prefill resultados with saved values if present
+    const prefill = {}
+    for (const p of data) {
+      if (p.resultado_guardado != null || p.dentro_norma_guardado != null) {
+        prefill[p.id_parametro] = {
+          resultado: p.resultado_guardado ?? '',
+          dentro_norma: !!p.dentro_norma_guardado,
+        }
+      }
+    }
+    setResultados(prefill)
     setMsg('')
   setApto(false)
   }
 
   async function guardarParametro(id_parametro) {
-    const r = resultados[id_parametro]
-    if (!r || !r.resultado) return setMsg('Completa el resultado')
+  const r = resultados[id_parametro]
+  if (!r || r.resultado == null || r.resultado === '') return setMsg('Completa el resultado')
     await api.post('/api/ensayos', {
       id_muestra: seleccion.id_muestra,
       id_parametro,
       resultado: r.resultado,
       dentro_norma: !!r.dentro_norma
     })
+    // Keep saved value reflected locally
+    setResultados(prev => ({
+      ...prev,
+      [id_parametro]: { resultado: r.resultado, dentro_norma: !!r.dentro_norma },
+    }))
     setMsg('Parámetro guardado')
   }
 
