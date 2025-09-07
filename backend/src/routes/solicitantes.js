@@ -5,6 +5,17 @@ import { authRequired, requireRoles } from '../middleware/auth.js';
 
 const router = Router();
 
+router.get('/', authRequired, async (req, res) => {
+  try {
+    const pool = await getPool();
+    const rs = await pool.request().query('SELECT TOP 100 * FROM Solicitante ORDER BY id_solicitante DESC');
+    res.json(rs.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error listando solicitantes' });
+  }
+});
+
 router.post(
   '/',
   authRequired,

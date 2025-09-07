@@ -1,23 +1,47 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import api from '../lib/api'
 
 export default function RegistroDatos() {
   const [sol, setSol] = useState({ nombre: '', direccion: '', contacto: '' })
   const [muestra, setMuestra] = useState({ codigo: '', tipo: 'Agua', fecha: '', hora: '', origen: '', condiciones: '', id_solicitante: '' })
+  const [solicitantes, setSolicitantes] = useState([])
+  const [buscar, setBuscar] = useState('')
   const [msg, setMsg] = useState('')
+
+  async function cargarSolicitantes() {
+    const { data } = await api.get('/api/solicitantes')
+    setSolicitantes(data)
+  }
+
+  useEffect(() => {
+    cargarSolicitantes()
+  }, [])
+
+  const filtrados = useMemo(() => {
+    const q = buscar.trim().toLowerCase()
+    if (!q) return solicitantes
+    return solicitantes.filter(s => (s.nombre_razon_social || '').toLowerCase().includes(q) || (s.contacto || '').toLowerCase().includes(q))
+  }, [buscar, solicitantes])
 
   async function crearSolicitante(e) {
     e.preventDefault()
     setMsg('')
     await api.post('/api/solicitantes', sol)
     setMsg('Solicitante creado')
+    setSol({ nombre: '', direccion: '', contacto: '' })
+    await cargarSolicitantes()
   }
 
   async function crearMuestra(e) {
     e.preventDefault()
     setMsg('')
+    if (!muestra.id_solicitante) {
+      setMsg('Seleccione un solicitante')
+      return
+    }
     await api.post('/api/muestras', { ...muestra, id_solicitante: parseInt(muestra.id_solicitante, 10) })
     setMsg('Muestra creada')
+    setMuestra({ codigo: '', tipo: 'Agua', fecha: '', hora: '', origen: '', condiciones: '', id_solicitante: '' })
   }
 
   return (
@@ -43,8 +67,19 @@ export default function RegistroDatos() {
         <input type="time" value={muestra.hora} onChange={e => setMuestra({ ...muestra, hora: e.target.value })} />
         <input placeholder="Origen" value={muestra.origen} onChange={e => setMuestra({ ...muestra, origen: e.target.value })} />
         <input placeholder="Condiciones" value={muestra.condiciones} onChange={e => setMuestra({ ...muestra, condiciones: e.target.value })} />
-        <input placeholder="ID Solicitante" value={muestra.id_solicitante} onChange={e => setMuestra({ ...muestra, id_solicitante: e.target.value })} />
-        <button>Crear Muestra</button>
+        <div style={{ display: 'grid', gap: 6 }}>
+          <strong>Solicitante</strong>
+          <input placeholder="Buscar solicitante por nombre o contacto" value={buscar} onChange={e => setBuscar(e.target.value)} />
+          <select value={muestra.id_solicitante} onChange={e => setMuestra({ ...muestra, id_solicitante: e.target.value })}>
+            <option value="">Seleccione…</option>
+            {filtrados.map(s => (
+              <option key={s.id_solicitante} value={s.id_solicitante}>
+                {s.nombre_razon_social} {s.contacto ? `- ${s.contacto}` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+  <button disabled={!muestra.id_solicitante}>Crear Muestra</button>
       </form>
       {msg && <div>{msg}</div>}
     </div>

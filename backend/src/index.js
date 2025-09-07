@@ -7,6 +7,8 @@ import solicitantesRouter from './routes/solicitantes.js';
 import muestrasRouter from './routes/muestras.js';
 import ensayosRouter from './routes/ensayos.js';
 import informesRouter from './routes/informes.js';
+import usuariosRouter from './routes/usuarios.js';
+import path from 'path';
 
 dotenv.config();
 
@@ -15,6 +17,7 @@ const PORT = process.env.PORT || 4000;
 
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') || '*', credentials: true }));
 app.use(express.json());
+app.use('/files', express.static(path.resolve(process.cwd(), 'uploads')));
 
 // Healthcheck
 app.get('/health', async (req, res) => {
@@ -32,6 +35,7 @@ app.use('/api/solicitantes', solicitantesRouter);
 app.use('/api/muestras', muestrasRouter);
 app.use('/api/ensayos', ensayosRouter);
 app.use('/api/informes', informesRouter);
+app.use('/api/usuarios', usuariosRouter);
 
 app.use((err, req, res, next) => {
   console.error(err);

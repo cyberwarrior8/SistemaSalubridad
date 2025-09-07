@@ -5,6 +5,59 @@ import { authRequired, requireRoles } from '../middleware/auth.js';
 
 const router = Router();
 
+// Listado básico de muestras
+router.get('/', authRequired, async (req, res) => {
+  try {
+    const pool = await getPool();
+    const rs = await pool.request().query('SELECT TOP 100 * FROM Muestra ORDER BY id_muestra DESC');
+    res.json(rs.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error listando muestras' });
+  }
+});
+
+// Muestras pendientes por asignar (estado Recibida)
+router.get('/pendientes', authRequired, requireRoles('Validacion'), async (req, res) => {
+  try {
+    const pool = await getPool();
+    const rs = await pool.request().query(`
+      SELECT m.*
+      FROM Muestra m
+      WHERE m.estado_actual = N'Recibida'
+      ORDER BY m.fecha_recepcion DESC, m.id_muestra DESC
+    `);
+    res.json(rs.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error listando pendientes' });
+  }
+});
+
+// Muestras en análisis con evaluador asignado (última asignación)
+router.get('/en-analisis', authRequired, requireRoles('Validacion'), async (req, res) => {
+  try {
+    const pool = await getPool();
+    const rs = await pool.request().query(`
+      SELECT m.*, u.id_usuario AS id_evaluador, u.nombre AS evaluador_nombre, u.correo AS evaluador_correo
+      FROM Muestra m
+      OUTER APPLY (
+        SELECT TOP 1 b.id_usuario_responsable
+        FROM BitacoraMuestra b
+        WHERE b.id_muestra = m.id_muestra
+        ORDER BY b.fecha_asignacion DESC, b.id_bitacora DESC
+      ) last_b
+      LEFT JOIN Usuario u ON u.id_usuario = last_b.id_usuario_responsable
+      WHERE m.estado_actual = N'En análisis'
+      ORDER BY m.fecha_recepcion DESC, m.id_muestra DESC;
+    `);
+    res.json(rs.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error listando en análisis' });
+  }
+});
+
 router.post(
   '/',
   authRequired,
