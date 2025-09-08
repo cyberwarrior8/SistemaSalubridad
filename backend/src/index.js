@@ -8,6 +8,7 @@ import muestrasRouter from './routes/muestras.js';
 import ensayosRouter from './routes/ensayos.js';
 import informesRouter from './routes/informes.js';
 import usuariosRouter from './routes/usuarios.js';
+import parametrosRouter from './routes/parametros.js';
 import path from 'path';
 
 dotenv.config();
@@ -36,6 +37,7 @@ app.use('/api/muestras', muestrasRouter);
 app.use('/api/ensayos', ensayosRouter);
 app.use('/api/informes', informesRouter);
 app.use('/api/usuarios', usuariosRouter);
+app.use('/api/parametros', parametrosRouter);
 
 app.use((err, req, res, next) => {
   console.error(err);

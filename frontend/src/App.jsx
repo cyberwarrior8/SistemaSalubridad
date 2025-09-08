@@ -4,6 +4,7 @@ import RegistroDatos from './pages/RegistroDatos'
 import Evaluador from './pages/Evaluador'
 import Validacion from './pages/Validacion'
 import GestionUsuarios from './pages/GestionUsuarios'
+import GestionParametros from './pages/GestionParametros'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 
 function ProtectedRoute({ children, roles }) {
@@ -22,6 +23,7 @@ function Nav() {
       {user?.roles.includes('Evaluador') && <Link to="/evaluador">Evaluador</Link>}
       {user?.roles.includes('Validacion') && <Link to="/validacion">Validación</Link>}
   {user?.roles.includes('Validacion') && <Link to="/usuarios">Usuarios</Link>}
+  {user?.roles.includes('Validacion') && <Link to="/parametros">Parámetros</Link>}
       <span style={{ marginLeft: 'auto' }}>
         {user ? (
           <>
@@ -45,6 +47,7 @@ export default function App() {
         <Route path="/evaluador" element={<ProtectedRoute roles={["Evaluador"]}><Evaluador /></ProtectedRoute>} />
         <Route path="/validacion" element={<ProtectedRoute roles={["Validacion"]}><Validacion /></ProtectedRoute>} />
   <Route path="/usuarios" element={<ProtectedRoute roles={["Validacion"]}><GestionUsuarios /></ProtectedRoute>} />
+  <Route path="/parametros" element={<ProtectedRoute roles={["Validacion"]}><GestionParametros /></ProtectedRoute>} />
         <Route path="/" element={<div style={{ padding: 16 }}>Bienvenido al Sistema de Salubridad</div>} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
