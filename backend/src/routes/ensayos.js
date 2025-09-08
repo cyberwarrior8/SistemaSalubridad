@@ -175,13 +175,13 @@ router.post(
   authRequired,
   requireRoles('Evaluador'),
   param('id').isInt(),
-  body('apto').isBoolean(),
+  body('apto').optional().isBoolean(),
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
     const id_muestra = parseInt(req.params.id, 10);
     const id_evaluador = req.user.sub;
-    const apto = !!req.body.apto;
+    const apto = req.body.apto === undefined ? false : !!req.body.apto;
 
     try {
       const pool = await getPool();

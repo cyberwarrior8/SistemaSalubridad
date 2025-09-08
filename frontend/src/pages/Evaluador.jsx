@@ -54,10 +54,6 @@ export default function Evaluador() {
 
   async function completarEvaluacion() {
     if (!seleccion) return
-    if (!apto) {
-      setMsg('Debe marcar "Apto Para Consumo" para completar')
-      return
-    }
   await api.post(`/api/ensayos/muestras/${seleccion.id_muestra}/completar`, { apto })
   // Refresh assigned list so evaluated sample disappears
   const { data } = await api.get('/api/ensayos/asignadas')

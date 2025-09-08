@@ -32,7 +32,7 @@ router.get(
       const rs = await pool
         .request()
         .input('id_muestra', sql.Int, id_muestra)
-        .query('SELECT * FROM Informe WHERE id_muestra = @id_muestra ORDER BY id_informe DESC');
+        .query('SELECT id_informe, id_muestra, version, estado, fecha_creacion, ruta_pdf FROM Informe WHERE id_muestra = @id_muestra ORDER BY id_informe DESC');
       res.json(rs.recordset);
     } catch (err) {
       console.error(err);

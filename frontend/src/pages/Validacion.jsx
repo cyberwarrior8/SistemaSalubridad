@@ -7,6 +7,8 @@ export default function Validacion() {
   const [enAnalisis, setEnAnalisis] = useState([])
   const [enEspera, setEnEspera] = useState([])
   const [validadas, setValidadas] = useState([])
+  const [histIdMuestra, setHistIdMuestra] = useState('')
+  const [histInformes, setHistInformes] = useState([])
   const [evaluadores, setEvaluadores] = useState([])
   const [validar, setValidar] = useState({ id_muestra: '', id_informe: '', accion: 'Validado', comentario: '' })
   const [informes, setInformes] = useState([])
@@ -42,8 +44,25 @@ export default function Validacion() {
     setInformes([])
     setMsg('')
     if (!id_muestra) return
-    const { data } = await api.get(`/api/informes/muestra/${id_muestra}`)
-    setInformes(data)
+    try {
+      const { data } = await api.get(`/api/informes/muestra/${id_muestra}`)
+      setInformes(data)
+    } catch (e) {
+      setMsg(e?.response?.data?.message || 'Error listando informes de la muestra')
+    }
+  }
+
+  async function cargarHistorial(id) {
+    setHistInformes([])
+    const id_m = String(id || histIdMuestra).trim()
+    if (!id_m) return
+    try {
+      const { data } = await api.get(`/api/informes/muestra/${id_m}`)
+      setHistInformes(data)
+    } catch (e) {
+      setHistInformes([])
+      setMsg(e?.response?.data?.message || 'No se pudo cargar el historial')
+    }
   }
 
   async function asignar(e) {
@@ -57,9 +76,24 @@ export default function Validacion() {
   async function validarInforme(e) {
     e.preventDefault()
     setMsg('')
-    await api.post(`/api/informes/${validar.id_informe}/validar`, { accion: validar.accion, comentario: validar.comentario || null })
+    if (!validar.id_muestra) {
+      setMsg('Seleccione una muestra')
+      return
+    }
+    if (!validar.id_informe) {
+      setMsg('Seleccione un informe')
+      return
+    }
+    try {
+  await api.post(`/api/informes/${validar.id_informe}/validar`, { accion: validar.accion, comentario: validar.comentario || null })
   setMsg(`Informe ${validar.accion}`)
+  setInformes([])
+  setValidar(v => ({ ...v, id_informe: '', id_muestra: '' }))
   await refreshLists()
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || 'Error al enviar la acción'
+      setMsg(msg)
+    }
   }
 
   return (
@@ -110,6 +144,9 @@ export default function Validacion() {
             ))}
           </select>
         </label>
+        {validar.id_muestra && informes.length === 0 && (
+          <div style={{ color: '#a00' }}>Esta muestra aún no tiene informes disponibles.</div>
+        )}
         {validar.id_informe && (
           <div style={{ border: '1px solid #ddd', padding: 8 }}>
             <div style={{ marginBottom: 8 }}>Vista previa del PDF</div>
@@ -130,7 +167,7 @@ export default function Validacion() {
           <option value="Devuelto">Devolver</option>
         </select>
         <input placeholder="Comentario" value={validar.comentario} onChange={e => setValidar({ ...validar, comentario: e.target.value })} />
-        <button>Enviar</button>
+  <button disabled={!validar.id_muestra || !validar.id_informe}>Enviar</button>
       </form>
       <section>
         <h3>Muestras en análisis</h3>
@@ -154,6 +191,48 @@ export default function Validacion() {
         </table>
       </section>
       <section>
+        <h3>Historial de informes</h3>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          <label>
+            Muestra
+            <select value={histIdMuestra} onChange={e => setHistIdMuestra(e.target.value)}>
+              <option value="">Seleccione…</option>
+              {[...enEspera, ...validadas].map(m => (
+                <option key={`hist-${m.id_muestra}`} value={m.id_muestra}>{`#${m.id_muestra} - ${m.codigo_unico} (${m.tipo})`}</option>
+              ))}
+            </select>
+          </label>
+          <input style={{ width: 140 }} placeholder="ID Muestra" value={histIdMuestra} onChange={e => setHistIdMuestra(e.target.value)} />
+          <button type="button" onClick={() => cargarHistorial()}>Cargar</button>
+        </div>
+        {histInformes.length > 0 ? (
+          <table border="1" cellPadding="6" style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr>
+                <th>ID Informe</th>
+                <th>Versión</th>
+                <th>Estado</th>
+                <th>Fecha</th>
+                <th>PDF</th>
+              </tr>
+            </thead>
+            <tbody>
+              {histInformes.map(i => (
+                <tr key={`inf-${i.id_informe}`}>
+                  <td>{i.id_informe}</td>
+                  <td>{i.version}</td>
+                  <td>{i.estado || '—'}</td>
+                  <td>{i.fecha_creacion ? new Date(i.fecha_creacion).toLocaleString() : '—'}</td>
+                  <td>{i.ruta_pdf ? <a href={`${api.defaults.baseURL}${i.ruta_pdf}`} target="_blank" rel="noreferrer">Ver PDF</a> : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div style={{ color: '#555' }}>Seleccione una muestra y pulse Cargar para ver sus informes.</div>
+        )}
+      </section>
+      <section>
         <h3>Muestras en espera</h3>
         <table border="1" cellPadding="6" style={{ borderCollapse: 'collapse' }}>
           <thead>
@@ -167,6 +246,9 @@ export default function Validacion() {
                 <td>{m.id_muestra}</td>
                 <td>{m.codigo_unico}</td>
                 <td>{m.tipo}</td>
+                <td>
+                  <button type="button" onClick={() => onSelectMuestraValidar(String(m.id_muestra))}>Seleccionar</button>
+                </td>
               </tr>
             ))}
           </tbody>
