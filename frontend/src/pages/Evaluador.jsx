@@ -58,8 +58,15 @@ export default function Evaluador() {
       setMsg('Debe marcar "Apto Para Consumo" para completar')
       return
     }
-    await api.post(`/api/ensayos/muestras/${seleccion.id_muestra}/completar`, { apto })
-    setMsg('Evaluación completada')
+  await api.post(`/api/ensayos/muestras/${seleccion.id_muestra}/completar`, { apto })
+  // Refresh assigned list so evaluated sample disappears
+  const { data } = await api.get('/api/ensayos/asignadas')
+  setAsignadas(data)
+  setSeleccion(null)
+  setParametros([])
+  setResultados({})
+  setApto(false)
+  setMsg('Evaluación completada')
   }
 
   return (

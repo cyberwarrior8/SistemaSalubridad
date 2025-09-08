@@ -20,7 +20,7 @@ router.get('/asignadas', authRequired, requireRoles('Evaluador'), async (req, re
         FROM Muestra m
         JOIN BitacoraMuestra b ON b.id_muestra = m.id_muestra
         WHERE b.id_usuario_responsable = @id_usuario
-          AND m.estado_actual IN (N'En análisis', N'Evaluada')
+          AND m.estado_actual = N'En análisis'
         ORDER BY m.id_muestra DESC;
       `);
     res.json(rs.recordset);
@@ -229,7 +229,7 @@ router.post(
       await pool
         .request()
         .input('id_muestra', sql.Int, id_muestra)
-        .query(`UPDATE Muestra SET estado_actual = N'Evaluada' WHERE id_muestra = @id_muestra`);
+        .query(`UPDATE Muestra SET estado_actual = N'En Espera' WHERE id_muestra = @id_muestra`);
 
   res.json({ message: 'Evaluación completada', apto, ruta_pdf });
     } catch (err) {

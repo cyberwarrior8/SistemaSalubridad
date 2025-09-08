@@ -71,6 +71,23 @@ router.get('/en-analisis', authRequired, requireRoles('Validacion'), async (req,
   }
 });
 
+// Muestras evaluadas (listas para validación)
+router.get('/evaluadas', authRequired, requireRoles('Validacion'), async (req, res) => {
+  try {
+    const pool = await getPool();
+    const rs = await pool.request().query(`
+      SELECT m.*
+      FROM Muestra m
+  WHERE m.estado_actual = N'En Espera'
+      ORDER BY m.fecha_recepcion DESC, m.id_muestra DESC;
+    `);
+    res.json(rs.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error listando evaluadas' });
+  }
+});
+
 router.post(
   '/',
   authRequired,
@@ -175,5 +192,28 @@ router.post(
     }
   }
 );
+
+// Muestras validadas con su último informe
+router.get('/validadas', authRequired, requireRoles('Validacion'), async (req, res) => {
+  try {
+    const pool = await getPool();
+    const rs = await pool.request().query(`
+      SELECT m.*, i.id_informe, i.ruta_pdf, i.fecha_creacion
+      FROM Muestra m
+      OUTER APPLY (
+        SELECT TOP 1 i.*
+        FROM Informe i
+        WHERE i.id_muestra = m.id_muestra
+        ORDER BY i.id_informe DESC
+      ) i
+      WHERE m.estado_actual = N'Validada'
+      ORDER BY m.fecha_recepcion DESC, m.id_muestra DESC;
+    `);
+    res.json(rs.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error listando validadas' });
+  }
+});
 
 export default router;

@@ -18,6 +18,29 @@ router.get('/', authRequired, async (req, res) => {
   }
 });
 
+// Informes por muestra específica
+router.get(
+  '/muestra/:id',
+  authRequired,
+  param('id').isInt(),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const id_muestra = parseInt(req.params.id, 10);
+    try {
+      const pool = await getPool();
+      const rs = await pool
+        .request()
+        .input('id_muestra', sql.Int, id_muestra)
+        .query('SELECT * FROM Informe WHERE id_muestra = @id_muestra ORDER BY id_informe DESC');
+      res.json(rs.recordset);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Error listando informes de la muestra' });
+    }
+  }
+);
+
 router.post(
   '/',
   authRequired,
@@ -103,6 +126,21 @@ router.post(
         .input('accion', sql.NVarChar(50), accion)
         .input('comentario', sql.NVarChar(255), comentario || null)
         .execute('sp_ValidarInforme');
+
+  // Reflejar estado de la muestra para controlar visibilidad en listados
+  // Si Validado -> 'Validada'; si Devuelto -> 'En análisis'
+      const estado = accion === 'Validado' ? 'Validada' : 'En análisis';
+      await pool
+        .request()
+        .input('estado', sql.NVarChar(50), estado)
+        .input('id_informe', sql.Int, parseInt(id, 10))
+        .query(`
+          UPDATE m
+          SET m.estado_actual = @estado
+          FROM Muestra m
+          JOIN Informe i ON i.id_muestra = m.id_muestra
+          WHERE i.id_informe = @id_informe;
+        `);
 
       res.json({ message: `Informe ${accion.toLowerCase()}` });
     } catch (err) {
