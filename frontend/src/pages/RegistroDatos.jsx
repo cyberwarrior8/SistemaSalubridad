@@ -111,51 +111,54 @@ export default function RegistroDatos() {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 16, padding: 16 }}>
-      <h2>Registro de Datos</h2>
-      <form onSubmit={crearSolicitante} style={{ display: 'grid', gap: 8 }}>
-        <strong>Nuevo Solicitante</strong>
-        <input placeholder="Nombre" value={sol.nombre} onChange={e => setSol({ ...sol, nombre: e.target.value })} />
-        <input placeholder="Dirección" value={sol.direccion} onChange={e => setSol({ ...sol, direccion: e.target.value })} />
-        <input placeholder="Contacto" value={sol.contacto} onChange={e => setSol({ ...sol, contacto: e.target.value })} />
-        <button>Crear Solicitante</button>
-      </form>
+    <div className="container page">
+      <h2 style={{ margin: '6px 0' }}>Registro de Datos</h2>
+      <div className="grid cols-2">
+        <form onSubmit={crearSolicitante} className="card">
+          <div className="card-header">Nuevo Solicitante</div>
+          <div className="card-body" style={{ display: 'grid', gap: 10 }}>
+            <input placeholder="Nombre / Razón Social" value={sol.nombre} onChange={e => setSol({ ...sol, nombre: e.target.value })} />
+            <input placeholder="Dirección" value={sol.direccion} onChange={e => setSol({ ...sol, direccion: e.target.value })} />
+            <input placeholder="Contacto" value={sol.contacto} onChange={e => setSol({ ...sol, contacto: e.target.value })} />
+            <button className="btn btn-primary" disabled={loadingSolicitante}>{loadingSolicitante ? 'Creando…' : 'Crear Solicitante'}</button>
+          </div>
+        </form>
 
-      <form onSubmit={crearMuestra} style={{ display: 'grid', gap: 8 }}>
-        <strong>Nueva Muestra</strong>
-        <input placeholder="Código" value={muestra.codigo} onChange={e => setMuestra({ ...muestra, codigo: e.target.value })} />
-        <select value={muestra.tipo} onChange={e => setMuestra({ ...muestra, tipo: e.target.value })}>
-          <option>Agua</option>
-          <option>Alimento</option>
-          <option>Bebida</option>
-        </select>
-        <input type="date" value={muestra.fecha} onChange={e => setMuestra({ ...muestra, fecha: e.target.value })} />
-        <input type="time" value={muestra.hora} onChange={e => setMuestra({ ...muestra, hora: e.target.value })} />
-        <input placeholder="Origen" value={muestra.origen} onChange={e => setMuestra({ ...muestra, origen: e.target.value })} />
-        <input placeholder="Condiciones" value={muestra.condiciones} onChange={e => setMuestra({ ...muestra, condiciones: e.target.value })} />
-        <div style={{ display: 'grid', gap: 6 }}>
-          <strong>Solicitante</strong>
-          <input placeholder="Buscar solicitante por nombre o contacto" value={buscar} onChange={e => setBuscar(e.target.value)} />
-          <select value={muestra.id_solicitante} onChange={e => setMuestra({ ...muestra, id_solicitante: e.target.value })}>
-            <option value="">Seleccione…</option>
-            {filtrados.map(s => (
-              <option key={s.id_solicitante} value={s.id_solicitante}>
-                {s.nombre_razon_social} {s.contacto ? `- ${s.contacto}` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button disabled={!muestra.id_solicitante || loadingMuestra}>{loadingMuestra ? 'Creando…' : 'Crear Muestra'}</button>
-      </form>
+        <form onSubmit={crearMuestra} className="card">
+          <div className="card-header">Nueva Muestra</div>
+          <div className="card-body" style={{ display: 'grid', gap: 10 }}>
+            <div className="field-row">
+              <input placeholder="Código" value={muestra.codigo} onChange={e => setMuestra({ ...muestra, codigo: e.target.value })} />
+              <select value={muestra.tipo} onChange={e => setMuestra({ ...muestra, tipo: e.target.value })}>
+                <option>Agua</option>
+                <option>Alimento</option>
+                <option>Bebida</option>
+              </select>
+            </div>
+            <div className="field-row">
+              <input type="date" value={muestra.fecha} onChange={e => setMuestra({ ...muestra, fecha: e.target.value })} />
+              <input type="time" value={muestra.hora} onChange={e => setMuestra({ ...muestra, hora: e.target.value })} />
+            </div>
+            <input placeholder="Origen" value={muestra.origen} onChange={e => setMuestra({ ...muestra, origen: e.target.value })} />
+            <input placeholder="Condiciones de transporte" value={muestra.condiciones} onChange={e => setMuestra({ ...muestra, condiciones: e.target.value })} />
+            <div className="field">
+              <label>Solicitante</label>
+              <input placeholder="Buscar por nombre o contacto" value={buscar} onChange={e => setBuscar(e.target.value)} />
+              <select value={muestra.id_solicitante} onChange={e => setMuestra({ ...muestra, id_solicitante: e.target.value })}>
+                <option value="">Seleccione…</option>
+                {filtrados.map(s => (
+                  <option key={s.id_solicitante} value={s.id_solicitante}>
+                    {s.nombre_razon_social} {s.contacto ? `- ${s.contacto}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button className="btn btn-primary" disabled={!muestra.id_solicitante || loadingMuestra}>{loadingMuestra ? 'Creando…' : 'Crear Muestra'}</button>
+          </div>
+        </form>
+      </div>
       {msg && (
-        <div role="alert" style={{
-          marginTop: 8,
-          padding: 8,
-          borderRadius: 4,
-          color: msgType === 'error' ? '#7a1111' : '#0f5132',
-          background: msgType === 'error' ? '#f8d7da' : '#d1e7dd',
-          border: `1px solid ${msgType === 'error' ? '#f5c2c7' : '#badbcc'}`
-        }}>
+        <div role="alert" className={`alert ${msgType === 'error' ? 'error' : 'ok'}`} style={{ marginTop: 12 }}>
           {msg}
         </div>
       )}

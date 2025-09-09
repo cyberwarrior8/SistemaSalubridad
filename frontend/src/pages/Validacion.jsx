@@ -96,194 +96,230 @@ export default function Validacion() {
     }
   }
 
+  async function eliminarMuestra(id_muestra) {
+    if (!id_muestra) return
+    if (!confirm(`Eliminar muestra #${id_muestra}? Esta acción no se puede deshacer.`)) return
+    setMsg('')
+    try {
+      await api.delete(`/api/muestras/${id_muestra}`)
+      setMsg('Muestra eliminada')
+      await refreshLists()
+    } catch (err) {
+      const m = err?.response?.data?.message || 'No se pudo eliminar la muestra'
+      setMsg(m)
+    }
+  }
+
   return (
-    <div style={{ display: 'grid', gap: 16, padding: 16 }}>
+    <div className="container page" style={{ display: 'grid', gap: 16 }}>
       <h2>Validación</h2>
       {pendientes.length > 0 && (
-        <div style={{ background: '#fff3cd', border: '1px solid #ffeeba', color: '#856404', padding: 8, borderRadius: 4 }}>
-          Tienes {pendientes.length} muestras pendientes de asignar a un evaluador.
-        </div>
+        <div className="alert warn">Tienes {pendientes.length} muestras pendientes de asignar a un evaluador.</div>
       )}
 
-      <form onSubmit={asignar} style={{ display: 'grid', gap: 8 }}>
-        <strong>Asignar Evaluador</strong>
-        <label>
-          Muestra
-          <select value={asig.id_muestra} onChange={e => setAsig({ ...asig, id_muestra: e.target.value })}>
-            <option value="">Seleccione…</option>
-            {pendientes.map(m => (
-              <option key={m.id_muestra} value={m.id_muestra}>{`#${m.id_muestra} - ${m.codigo_unico} (${m.tipo})`}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Evaluador
-          <select value={asig.id_evaluador} onChange={e => setAsig({ ...asig, id_evaluador: e.target.value })}>
-            <option value="">Seleccione…</option>
-            {evaluadores.map(u => (
-              <option key={u.id_usuario} value={u.id_usuario}>{u.nombre} ({u.correo})</option>
-            ))}
-          </select>
-        </label>
-        <input placeholder="Comentario" value={asig.comentario} onChange={e => setAsig({ ...asig, comentario: e.target.value })} />
-        <button>Asignar</button>
-      </form>
-
-      <form onSubmit={validarInforme} style={{ display: 'grid', gap: 8 }}>
-        <strong>Validar Informe</strong>
-        <label>
-          Muestra
-          <select value={validar.id_muestra} onChange={e => onSelectMuestraValidar(e.target.value)}>
-            <option value="">Seleccione…</option>
-            {enEspera.map(m => (
-              <option key={`val-${m.id_muestra}`} value={m.id_muestra}>{`#${m.id_muestra} - ${m.codigo_unico} (${m.tipo})`}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Informe
-          <select value={validar.id_informe} onChange={e => setValidar({ ...validar, id_informe: e.target.value })} disabled={!validar.id_muestra}>
-            <option value="">Seleccione…</option>
-            {informes.map(i => (
-              <option key={i.id_informe} value={i.id_informe}>{`#${i.id_informe} - ${new Date(i.fecha_creacion || i.fecha || Date.now()).toLocaleString()}`}</option>
-            ))}
-          </select>
-        </label>
-        {validar.id_muestra && informes.length === 0 && (
-          <div style={{ color: '#a00' }}>Esta muestra aún no tiene informes disponibles.</div>
-        )}
-        {validar.id_informe && (
-          <div style={{ border: '1px solid #ddd', padding: 8 }}>
-            <div style={{ marginBottom: 8 }}>Vista previa del PDF</div>
-            {/* Asumimos que el backend sirve /files */}
-            {(() => {
-              const inf = informes.find(i => String(i.id_informe) === String(validar.id_informe))
-              const src = inf?.ruta_pdf ? (inf.ruta_pdf.startsWith('http') ? inf.ruta_pdf : `${api.defaults.baseURL}${inf.ruta_pdf}`) : null
-              return src ? (
-                <iframe title="informe" src={src} style={{ width: '100%', height: 400, border: 'none' }} />
-              ) : (
-                <div>No hay PDF asociado</div>
-              )
-            })()}
+      <div className="grid cols-2">
+        <form onSubmit={asignar} className="card">
+          <div className="card-header">Asignar Evaluador</div>
+          <div className="card-body" style={{ display: 'grid', gap: 8 }}>
+            <div className="field-row" style={{ alignItems: 'end' }}>
+              <label style={{ flex: 1 }}>
+                Muestra
+                <select value={asig.id_muestra} onChange={e => setAsig({ ...asig, id_muestra: e.target.value })}>
+                  <option value="">Seleccione…</option>
+                  {pendientes.map(m => (
+                    <option key={m.id_muestra} value={m.id_muestra}>{`#${m.id_muestra} - ${m.codigo_unico} (${m.tipo})`}</option>
+                  ))}
+                </select>
+              </label>
+              {asig.id_muestra && (
+                <button type="button" className="btn btn-danger" onClick={() => eliminarMuestra(Number(asig.id_muestra))}>Eliminar muestra</button>
+              )}
+            </div>
+            <label>
+              Evaluador
+              <select value={asig.id_evaluador} onChange={e => setAsig({ ...asig, id_evaluador: e.target.value })}>
+                <option value="">Seleccione…</option>
+                {evaluadores.map(u => (
+                  <option key={u.id_usuario} value={u.id_usuario}>{u.nombre} ({u.correo})</option>
+                ))}
+              </select>
+            </label>
+            <input placeholder="Comentario" value={asig.comentario} onChange={e => setAsig({ ...asig, comentario: e.target.value })} />
+            <button className="btn btn-primary">Asignar</button>
           </div>
-        )}
-        <select value={validar.accion} onChange={e => setValidar({ ...validar, accion: e.target.value })}>
-          <option value="Validado">Validar</option>
-          <option value="Devuelto">Devolver</option>
-        </select>
-        <input placeholder="Comentario" value={validar.comentario} onChange={e => setValidar({ ...validar, comentario: e.target.value })} />
-  <button disabled={!validar.id_muestra || !validar.id_informe}>Enviar</button>
-      </form>
-      <section>
-        <h3>Muestras en análisis</h3>
-        <table border="1" cellPadding="6" style={{ borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th>ID</th><th>Código</th><th>Tipo</th><th>Evaluador</th><th>Correo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {enAnalisis.map(m => (
-              <tr key={m.id_muestra}>
-                <td>{m.id_muestra}</td>
-                <td>{m.codigo_unico}</td>
-                <td>{m.tipo}</td>
-                <td>{m.evaluador_nombre || '-'}</td>
-                <td>{m.evaluador_correo || '-'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-      <section>
-        <h3>Historial de informes</h3>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-          <label>
-            Muestra
-            <select value={histIdMuestra} onChange={e => setHistIdMuestra(e.target.value)}>
-              <option value="">Seleccione…</option>
-              {[...enEspera, ...validadas].map(m => (
-                <option key={`hist-${m.id_muestra}`} value={m.id_muestra}>{`#${m.id_muestra} - ${m.codigo_unico} (${m.tipo})`}</option>
-              ))}
+        </form>
+
+        <form onSubmit={validarInforme} className="card">
+          <div className="card-header">Validar Informe</div>
+          <div className="card-body" style={{ display: 'grid', gap: 8 }}>
+            <label>
+              Muestra
+              <select value={validar.id_muestra} onChange={e => onSelectMuestraValidar(e.target.value)}>
+                <option value="">Seleccione…</option>
+                {enEspera.map(m => (
+                  <option key={`val-${m.id_muestra}`} value={m.id_muestra}>{`#${m.id_muestra} - ${m.codigo_unico} (${m.tipo})`}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Informe
+              <select value={validar.id_informe} onChange={e => setValidar({ ...validar, id_informe: e.target.value })} disabled={!validar.id_muestra}>
+                <option value="">Seleccione…</option>
+                {informes.map(i => (
+                  <option key={i.id_informe} value={i.id_informe}>{`#${i.id_informe} - ${new Date(i.fecha_creacion || i.fecha || Date.now()).toLocaleString()}`}</option>
+                ))}
+              </select>
+            </label>
+            {validar.id_muestra && informes.length === 0 && (
+              <div className="alert error">Esta muestra aún no tiene informes disponibles.</div>
+            )}
+            {validar.id_informe && (
+              <div className="card" style={{ borderColor: 'var(--border)' }}>
+                <div className="card-body">
+                  <div style={{ marginBottom: 8 }}>Vista previa del PDF</div>
+                  {(() => {
+                    const inf = informes.find(i => String(i.id_informe) === String(validar.id_informe))
+                    const src = inf?.ruta_pdf ? (inf.ruta_pdf.startsWith('http') ? inf.ruta_pdf : `${api.defaults.baseURL}${inf.ruta_pdf}`) : null
+                    return src ? (
+                      <iframe title="informe" src={src} style={{ width: '100%', height: 400, border: 'none' }} />
+                    ) : (
+                      <div className="muted">No hay PDF asociado</div>
+                    )
+                  })()}
+                </div>
+              </div>
+            )}
+            <select value={validar.accion} onChange={e => setValidar({ ...validar, accion: e.target.value })}>
+              <option value="Validado">Validar</option>
+              <option value="Devuelto">Devolver</option>
             </select>
-          </label>
-          <input style={{ width: 140 }} placeholder="ID Muestra" value={histIdMuestra} onChange={e => setHistIdMuestra(e.target.value)} />
-          <button type="button" onClick={() => cargarHistorial()}>Cargar</button>
-        </div>
-        {histInformes.length > 0 ? (
-          <table border="1" cellPadding="6" style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <input placeholder="Comentario" value={validar.comentario} onChange={e => setValidar({ ...validar, comentario: e.target.value })} />
+            <button className="btn btn-primary" disabled={!validar.id_muestra || !validar.id_informe}>Enviar</button>
+          </div>
+        </form>
+      </div>
+
+      <section className="card">
+        <div className="card-header">Muestras en análisis</div>
+        <div className="card-body">
+          <table className="table">
             <thead>
               <tr>
-                <th>ID Informe</th>
-                <th>Versión</th>
-                <th>Estado</th>
-                <th>Fecha</th>
-                <th>PDF</th>
+                <th>ID</th><th>Código</th><th>Tipo</th><th>Evaluador</th><th>Correo</th>
               </tr>
             </thead>
             <tbody>
-              {histInformes.map(i => (
-                <tr key={`inf-${i.id_informe}`}>
-                  <td>{i.id_informe}</td>
-                  <td>{i.version}</td>
-                  <td>{i.estado || '—'}</td>
-                  <td>{i.fecha_creacion ? new Date(i.fecha_creacion).toLocaleString() : '—'}</td>
-                  <td>{i.ruta_pdf ? <a href={`${api.defaults.baseURL}${i.ruta_pdf}`} target="_blank" rel="noreferrer">Ver PDF</a> : '—'}</td>
+              {enAnalisis.map(m => (
+                <tr key={m.id_muestra}>
+                  <td>{m.id_muestra}</td>
+                  <td>{m.codigo_unico}</td>
+                  <td>{m.tipo}</td>
+                  <td>{m.evaluador_nombre || '-'}</td>
+                  <td>{m.evaluador_correo || '-'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        ) : (
-          <div style={{ color: '#555' }}>Seleccione una muestra y pulse Cargar para ver sus informes.</div>
-        )}
+        </div>
       </section>
-      <section>
-        <h3>Muestras en espera</h3>
-        <table border="1" cellPadding="6" style={{ borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th>ID</th><th>Código</th><th>Tipo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {enEspera.map(m => (
-              <tr key={`espera-${m.id_muestra}`}>
-                <td>{m.id_muestra}</td>
-                <td>{m.codigo_unico}</td>
-                <td>{m.tipo}</td>
-                <td>
-                  <button type="button" onClick={() => onSelectMuestraValidar(String(m.id_muestra))}>Seleccionar</button>
-                </td>
+
+      <section className="card">
+        <div className="card-header">Historial de informes</div>
+        <div className="card-body">
+          <div className="field-row" style={{ marginBottom: 8 }}>
+            <label style={{ minWidth: 260 }}>
+              Muestra
+              <select value={histIdMuestra} onChange={e => setHistIdMuestra(e.target.value)}>
+                <option value="">Seleccione…</option>
+                {[...enEspera, ...validadas].map(m => (
+                  <option key={`hist-${m.id_muestra}`} value={m.id_muestra}>{`#${m.id_muestra} - ${m.codigo_unico} (${m.tipo})`}</option>
+                ))}
+              </select>
+            </label>
+            <input style={{ width: 140 }} placeholder="ID Muestra" value={histIdMuestra} onChange={e => setHistIdMuestra(e.target.value)} />
+            <button type="button" className="btn" onClick={() => cargarHistorial()}>Cargar</button>
+          </div>
+          {histInformes.length > 0 ? (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>ID Informe</th>
+                  <th>Versión</th>
+                  <th>Estado</th>
+                  <th>Fecha</th>
+                  <th>PDF</th>
+                </tr>
+              </thead>
+              <tbody>
+                {histInformes.map(i => (
+                  <tr key={`inf-${i.id_informe}`}>
+                    <td>{i.id_informe}</td>
+                    <td>{i.version}</td>
+                    <td>{i.estado || '—'}</td>
+                    <td>{i.fecha_creacion ? new Date(i.fecha_creacion).toLocaleString() : '—'}</td>
+                    <td>{i.ruta_pdf ? <a href={`${api.defaults.baseURL}${i.ruta_pdf}`} target="_blank" rel="noreferrer">Ver PDF</a> : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="muted">Seleccione una muestra y pulse Cargar para ver sus informes.</div>
+          )}
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-header">Muestras en espera</div>
+        <div className="card-body">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>ID</th><th>Código</th><th>Tipo</th><th>Acción</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {enEspera.map(m => (
+                <tr key={`espera-${m.id_muestra}`}>
+                  <td>{m.id_muestra}</td>
+                  <td>{m.codigo_unico}</td>
+                  <td>{m.tipo}</td>
+                  <td>
+                    <button type="button" className="btn" onClick={() => onSelectMuestraValidar(String(m.id_muestra))}>Seleccionar</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
-      <section>
-        <h3>Muestras validadas</h3>
-        <table border="1" cellPadding="6" style={{ borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th>ID</th><th>Código</th><th>Tipo</th><th>Informe</th>
-            </tr>
-          </thead>
-          <tbody>
-            {validadas.map(m => (
-              <tr key={`vali-${m.id_muestra}`}>
-                <td>{m.id_muestra}</td>
-                <td>{m.codigo_unico}</td>
-                <td>{m.tipo}</td>
-                <td>
-                  {m.ruta_pdf ? (
-                    <a href={`${api.defaults.baseURL}${m.ruta_pdf}`} target="_blank" rel="noreferrer">Ver PDF</a>
-                  ) : '—'}
-                </td>
+
+      <section className="card">
+        <div className="card-header">Muestras validadas</div>
+        <div className="card-body">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>ID</th><th>Código</th><th>Tipo</th><th>Informe</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {validadas.map(m => (
+                <tr key={`vali-${m.id_muestra}`}>
+                  <td>{m.id_muestra}</td>
+                  <td>{m.codigo_unico}</td>
+                  <td>{m.tipo}</td>
+                  <td>
+                    {m.ruta_pdf ? (
+                      <a href={`${api.defaults.baseURL}${m.ruta_pdf}`} target="_blank" rel="noreferrer">Ver PDF</a>
+                    ) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
-      {msg && <div>{msg}</div>}
+      {msg && <div className="alert ok">{msg}</div>}
     </div>
   )
 }

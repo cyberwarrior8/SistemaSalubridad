@@ -102,69 +102,77 @@ export default function GestionParametros() {
   }
 
   return (
-    <div style={{ padding: 16, display: 'grid', gap: 16 }}>
+    <div className="container page" style={{ display: 'grid', gap: 16 }}>
       <h2>Gestión de Parámetros y Normas</h2>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <select value={tipo} onChange={e => setTipo(e.target.value)}>
-          <option value=''>Todos los tipos</option>
-          {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <input placeholder='Buscar por nombre/unidad' value={q} onChange={e => setQ(e.target.value)} />
-        <button onClick={load}>Buscar</button>
-        <button onClick={nuevo}>Nuevo</button>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <form onSubmit={guardar} style={{ border: '1px solid #ddd', padding: 12, display: 'grid', gap: 8 }}>
-          <strong>{form.id_parametro == null ? 'Nuevo Parámetro' : `Editar Parámetro #${form.id_parametro}`}</strong>
-          <input placeholder='Nombre' value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} />
-          <select value={form.tipo_muestra} onChange={e => setForm({ ...form, tipo_muestra: e.target.value })}>
-            <option value=''>Tipo de muestra</option>
+      <div className="card">
+        <div className="card-body field-row">
+          <select value={tipo} onChange={e => setTipo(e.target.value)}>
+            <option value=''>Todos los tipos</option>
             {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
-          <input placeholder='Unidad (opcional)' value={form.unidad} onChange={e => setForm({ ...form, unidad: e.target.value })} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type='submit'>{form.id_parametro == null ? 'Crear' : 'Guardar'}</button>
+          <input placeholder='Buscar por nombre/unidad' value={q} onChange={e => setQ(e.target.value)} />
+          <button className="btn" onClick={load}>Buscar</button>
+          <button className="btn" onClick={nuevo}>Nuevo</button>
+        </div>
+      </div>
+
+      <div className="grid cols-2">
+        <form onSubmit={guardar} className="card">
+          <div className="card-header">{form.id_parametro == null ? 'Nuevo Parámetro' : `Editar Parámetro #${form.id_parametro}`}</div>
+          <div className="card-body" style={{ display: 'grid', gap: 8 }}>
+            <input placeholder='Nombre' value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} />
+            <select value={form.tipo_muestra} onChange={e => setForm({ ...form, tipo_muestra: e.target.value })}>
+              <option value=''>Tipo de muestra</option>
+              {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <input placeholder='Unidad (opcional)' value={form.unidad} onChange={e => setForm({ ...form, unidad: e.target.value })} />
+            <div className="field-row">
+              <button className="btn btn-primary" type='submit'>{form.id_parametro == null ? 'Crear' : 'Guardar'}</button>
+            </div>
           </div>
         </form>
 
-        <form onSubmit={guardarNorma} style={{ border: '1px solid #ddd', padding: 12, display: 'grid', gap: 8 }}>
-          <strong>Norma de Referencia</strong>
-          <input placeholder='Operador (ej. <=, >=, entre)' value={norma.operador} onChange={e => setNorma({ ...norma, operador: e.target.value })} />
-          <input placeholder='Límite mínimo' value={norma.limite_minimo} onChange={e => setNorma({ ...norma, limite_minimo: e.target.value })} />
-          <input placeholder='Límite máximo' value={norma.limite_maximo} onChange={e => setNorma({ ...norma, limite_maximo: e.target.value })} />
-          <input placeholder='Descripción' value={norma.descripcion} onChange={e => setNorma({ ...norma, descripcion: e.target.value })} />
-          <input placeholder='Fuente' value={norma.fuente} onChange={e => setNorma({ ...norma, fuente: e.target.value })} />
-          <button type='submit' disabled={form.id_parametro == null}>Guardar norma</button>
+        <form onSubmit={guardarNorma} className="card">
+          <div className="card-header">Norma de Referencia</div>
+          <div className="card-body" style={{ display: 'grid', gap: 8 }}>
+            <input placeholder='Operador (ej. <=, >=, entre)' value={norma.operador} onChange={e => setNorma({ ...norma, operador: e.target.value })} />
+            <input placeholder='Límite mínimo' value={norma.limite_minimo} onChange={e => setNorma({ ...norma, limite_minimo: e.target.value })} />
+            <input placeholder='Límite máximo' value={norma.limite_maximo} onChange={e => setNorma({ ...norma, limite_maximo: e.target.value })} />
+            <input placeholder='Descripción' value={norma.descripcion} onChange={e => setNorma({ ...norma, descripcion: e.target.value })} />
+            <input placeholder='Fuente' value={norma.fuente} onChange={e => setNorma({ ...norma, fuente: e.target.value })} />
+            <button className="btn btn-primary" type='submit' disabled={form.id_parametro == null}>Guardar norma</button>
+          </div>
         </form>
       </div>
 
-      <div>
-        <h3>Parámetros</h3>
-        <table border='1' cellPadding='6' style={{ borderCollapse: 'collapse', width: '100%' }}>
-          <thead>
-            <tr>
-              <th>ID</th><th>Nombre</th><th>Tipo</th><th>Unidad</th><th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lista.map(p => (
-              <tr key={p.id_parametro}>
-                <td>{p.id_parametro}</td>
-                <td>{p.nombre}</td>
-                <td>{p.tipo_muestra}</td>
-                <td>{p.unidad || '—'}</td>
-                <td>
-                  <button onClick={() => editar(p)}>Editar</button>
-                  <button onClick={() => eliminar(p)}>Eliminar</button>
-                </td>
+      <div className="card">
+        <div className="card-header">Parámetros</div>
+        <div className="card-body">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>ID</th><th>Nombre</th><th>Tipo</th><th>Unidad</th><th>Acciones</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {lista.map(p => (
+                <tr key={p.id_parametro}>
+                  <td>{p.id_parametro}</td>
+                  <td>{p.nombre}</td>
+                  <td>{p.tipo_muestra}</td>
+                  <td>{p.unidad || '—'}</td>
+                  <td>
+                    <button className="btn" onClick={() => editar(p)}>Editar</button>
+                    <button className="btn btn-danger" onClick={() => eliminar(p)}>Eliminar</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {msg && <div>{msg}</div>}
+      {msg && <div className="alert ok">{msg}</div>}
     </div>
   )
 }

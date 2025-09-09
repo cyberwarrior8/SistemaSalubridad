@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { getPool, sql } from '../lib/db.js';
 import { authRequired, requireRoles } from '../middleware/auth.js';
+import fs from 'fs';
+import path from 'path';
 
 const router = Router();
 
@@ -215,5 +217,81 @@ router.get('/validadas', authRequired, requireRoles('Validacion'), async (req, r
     res.status(500).json({ message: 'Error listando validadas' });
   }
 });
+
+// Eliminar muestra (solo Validación). No permite si ya está validada/certificada.
+router.delete(
+  '/:id',
+  authRequired,
+  requireRoles('Validacion'),
+  param('id').isInt(),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const id = parseInt(req.params.id, 10);
+
+    try {
+      const pool = await getPool();
+
+      // Verificar existencia y estado
+      const mRs = await pool.request().input('id', sql.Int, id).query('SELECT estado_actual FROM dbo.Muestra WHERE id_muestra = @id');
+      if (mRs.recordset.length === 0) return res.status(404).json({ message: 'Muestra no encontrada' });
+      const estado = mRs.recordset[0].estado_actual || '';
+      if (estado !== 'Recibida') {
+        return res.status(409).json({ message: 'Solo se puede eliminar una muestra no asignada (estado: Recibida)' });
+      }
+
+      // Obtener rutas de PDFs para limpieza posterior
+      const pdfRs = await pool
+        .request()
+        .input('id', sql.Int, id)
+        .query('SELECT ruta_pdf FROM dbo.Informe WHERE id_muestra = @id AND ruta_pdf IS NOT NULL');
+      const rutas = pdfRs.recordset.map(r => r.ruta_pdf).filter(Boolean);
+
+      // Borrar en transacción respetando FKs
+      const tx = new sql.Transaction(pool);
+      await tx.begin();
+      try {
+        const tReq = new sql.Request(tx);
+        await tReq.input('id', sql.Int, id).query(`
+          DELETE HI
+          FROM dbo.HistorialInforme HI
+          INNER JOIN dbo.Informe I ON I.id_informe = HI.id_informe
+          WHERE I.id_muestra = @id;
+        `);
+        await tReq.query('DELETE FROM dbo.Informe WHERE id_muestra = @id');
+        await tReq.query('DELETE FROM dbo.Ensayo WHERE id_muestra = @id');
+        await tReq.query('DELETE FROM dbo.MuestraParametroAsignado WHERE id_muestra = @id');
+        await tReq.query('DELETE FROM dbo.BitacoraMuestra WHERE id_muestra = @id');
+        await tReq.query('DELETE FROM dbo.Notificacion WHERE id_muestra = @id');
+        await tReq.query('DELETE FROM dbo.HistorialEstadoMuestra WHERE id_muestra = @id');
+        await tReq.query('DELETE FROM dbo.Muestra WHERE id_muestra = @id');
+        await tx.commit();
+      } catch (e) {
+        await tx.rollback();
+        throw e;
+      }
+
+      // Limpieza de archivos PDF (best-effort)
+      const uploadsDir = path.resolve(process.cwd(), 'uploads');
+      for (const ruta of rutas) {
+        try {
+          const filename = ruta.startsWith('/files/') ? ruta.slice('/files/'.length) : ruta.replace(/^\\?files[\\/]/i, '');
+          if (!filename) continue;
+          const fpath = path.join(uploadsDir, filename);
+          if (fs.existsSync(fpath)) fs.unlinkSync(fpath);
+        } catch {}
+      }
+
+      res.json({ message: 'Muestra eliminada' });
+    } catch (err) {
+      console.error(err);
+      const number = err?.number || err?.originalError?.info?.number;
+      if (number === 547) {
+        return res.status(409).json({ message: 'No se puede eliminar por dependencias de base de datos' });
+      }
+      res.status(500).json({ message: 'Error eliminando muestra' });
+    }
+  }
+);
 
 export default router;
