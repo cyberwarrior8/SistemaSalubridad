@@ -44,6 +44,4 @@ La API arranca en `http://localhost:4000` por defecto.
 
 Revisa cada archivo en `src/routes` para el detalle de parámetros.
 
-## Notas
-- La columna de contraseña en SQL es `[contraseña_hash]` (con ñ). El código la referencia con corchetes. Si renombraste a `contrasena_hash`, ajusta la query en `src/routes/auth.js`.
-- El CORS por defecto permite `http://localhost:5173` (Vite). Cambia `CORS_ORIGIN` según tu front.
+
