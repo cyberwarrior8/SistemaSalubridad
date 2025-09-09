@@ -73,7 +73,12 @@ export default function Evaluador() {
           {asignadas.length === 0 && <div className="muted">No hay muestras en análisis.</div>}
           {asignadas.map(m => (
             <div key={m.id_muestra} className="list-item">
-              <div>#{m.id_muestra} - {m.codigo_unico} <span className="muted">({m.tipo})</span></div>
+              <div>
+                #{m.id_muestra} - {m.codigo_unico} <span className="muted">({m.tipo})</span>
+                {m.comentario_asignacion ? (
+                  <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Nota: {m.comentario_asignacion}</div>
+                ) : null}
+              </div>
               <button className="btn" onClick={() => cargarParametros(m.id_muestra)}>Abrir</button>
             </div>
           ))}
@@ -86,7 +91,12 @@ export default function Evaluador() {
           {!seleccion && <div className="muted">Seleccione una muestra de la lista.</div>}
           {seleccion && (
             <>
-              <div><strong>Muestra:</strong> #{seleccion.id_muestra} - {seleccion.codigo_unico}</div>
+              <div>
+                <strong>Muestra:</strong> #{seleccion.id_muestra} - {seleccion.codigo_unico}
+                {seleccion.comentario_asignacion ? (
+                  <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Nota de asignación: {seleccion.comentario_asignacion}</div>
+                ) : null}
+              </div>
               <div className="grid" style={{ gap: 12 }}>
                 {parametros.map(p => (
                   <div key={p.id_parametro} className="card" style={{ borderColor: p.es_micro ? '#0ea5e9' : 'var(--border)' }}>

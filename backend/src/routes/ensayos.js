@@ -47,11 +47,16 @@ router.get('/asignadas', authRequired, requireRoles('Evaluador'), async (req, re
       .request()
       .input('id_usuario', sql.Int, req.user.sub)
       .query(`
-        SELECT DISTINCT m.*
+        SELECT DISTINCT m.*, lb.comentario AS comentario_asignacion
         FROM Muestra m
-        JOIN BitacoraMuestra b ON b.id_muestra = m.id_muestra
-        WHERE b.id_usuario_responsable = @id_usuario
-          AND m.estado_actual = N'En análisis'
+        JOIN BitacoraMuestra b ON b.id_muestra = m.id_muestra AND b.id_usuario_responsable = @id_usuario
+        OUTER APPLY (
+          SELECT TOP 1 comentario
+          FROM BitacoraMuestra
+          WHERE id_muestra = m.id_muestra AND id_usuario_responsable = @id_usuario
+          ORDER BY fecha_asignacion DESC, id_bitacora DESC
+        ) lb
+        WHERE m.estado_actual = N'En análisis'
         ORDER BY m.id_muestra DESC;
       `);
     res.json(rs.recordset);
