@@ -1,0 +1,33 @@
+:root{ --text:#000; --muted:#333; --border:#999; --brand:#000000; }
+*{ box-sizing:border-box; }
+body{ font-family:Arial, Helvetica, sans-serif; color:var(--text); font-size:12px; }
+.header{ display:grid; grid-template-columns: 100px 1fr 100px; align-items:center; gap:6px; border:none; padding:8px; }
+.header .left, .header .right{ display:flex; align-items:center; justify-content:center; }
+.header img{ display:block; max-height:80px; height:auto; width:auto; max-width:100%; }
+.header .text{ text-align:center; }
+.header .title{ font-size:16px; font-weight:700; color:var(--brand); }
+.table{ width:100%; border-collapse:collapse; }
+.table th, .table td{ border:1px solid #000; padding:6px; vertical-align:top; }
+.table th{ background:#f2f2f2; text-align:center; }
+.table.meta td:nth-child(1),
+.table.meta td:nth-child(3){ font-weight:700; }
+
+/* Meta tables: only show bottom border on value cells (2nd and 4th columns) */
+.table.meta td{ border:none; padding:6px 8px; }
+.table.meta td:nth-child(2),
+.table.meta td:nth-child(4),
+.table.meta td[colspan]{ border-bottom:1px solid #000; }
+.table.meta td.value{ border-bottom:1px solid #000; }
+
+/* Three-column meta section (Color/Aspecto/Peso | values | Sabor/Textura/Fecha) */
+.table.meta.meta-3 td:nth-child(1){ font-weight:700; }
+.table.meta.meta-3 td:nth-child(3){ font-weight:700; }
+.table.meta.meta-3 td:nth-child(3){ border-bottom:1px solid #000; }
+
+/* Six-column meta section: label/value x3 */
+.table.meta.meta-6 td{ border:none; padding:6px 8px; border-bottom:1px solid #000; }
+.table.meta.meta-6 td:nth-child(odd){ font-weight:700; }
+.footer{ border-top:1px solid #000; margin-top:12px; padding-top:8px; display:flex; justify-content:space-between; align-items:center; }
+.badge{ padding:2px 6px; border-radius:4px; font-weight:bold; }
+.badge.apto{ background:#d4edda; color:#155724; }
+.badge.noapto{ background:#f8d7da; color:#721c24; }

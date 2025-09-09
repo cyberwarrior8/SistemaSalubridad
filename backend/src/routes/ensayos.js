@@ -5,8 +5,39 @@ import { authRequired, requireRoles } from '../middleware/auth.js';
 import fs from 'fs';
 import path from 'path';
 import PDFDocument from 'pdfkit';
+import { generateInformePDF } from '../lib/pdfRenderer.js';
 
 const router = Router();
+
+// Heurística: clasificar parámetros microbiológicos por nombre/unidad
+const MICRO_NAME_REGEXES = [
+  /coliform/i,
+  /e\.?\s*coli/i,
+  /salmonella/i,
+  /staphyl/i,
+  /aerob/i,
+  /mesof/i,
+  /(mohos|levaduras|hongos)/i,
+  /enterobact/i,
+  /listeria/i,
+  /clostrid/i,
+  /pseudomon/i,
+  /escherichia/i,
+  /bacillus/i,
+  /campylobact/i
+];
+const MICRO_UNIT_REGEXES = [
+  /\bufc\b/i, // Unidades Formadoras de Colonias (CFU)
+  /cfu/i,
+  /\bnmp\b/i, // Número Más Probable (MPN)
+  /mpn/i,
+  /col\/?\s*\d{2,}\s*(ml|g)?/i,
+  /ausencia|presencia/i
+];
+function isMicroParam(nombre, unidad) {
+  const base = `${nombre || ''} ${unidad || ''}`;
+  return MICRO_NAME_REGEXES.some((re) => re.test(base)) || MICRO_UNIT_REGEXES.some((re) => re.test(base));
+}
 
 // Muestras asignadas al evaluador actual
 router.get('/asignadas', authRequired, requireRoles('Evaluador'), async (req, res) => {
@@ -65,7 +96,8 @@ router.get('/muestras/:id/parametros', authRequired, requireRoles('Evaluador'), 
       ORDER BY p.id_parametro;
     `);
     if (asignados.recordset.length > 0) {
-      return res.json(asignados.recordset);
+      const enriched = asignados.recordset.map((row) => ({ ...row, es_micro: isMicroParam(row.nombre, row.unidad) }));
+      return res.json(enriched);
     }
 
     // Si no hay asignados, devolver por tipo de muestra
@@ -94,7 +126,8 @@ router.get('/muestras/:id/parametros', authRequired, requireRoles('Evaluador'), 
         WHERE p.tipo_muestra = @tipo
         ORDER BY p.id_parametro;
       `);
-    res.json(prs.recordset);
+  const enriched = prs.recordset.map((row) => ({ ...row, es_micro: isMicroParam(row.nombre, row.unidad) }));
+  res.json(enriched);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Error obteniendo parámetros' });
@@ -147,7 +180,7 @@ router.get(
     const id_muestra = parseInt(req.params.id, 10);
     try {
       const pool = await getPool();
-      const rs = await pool
+  const rs = await pool
         .request()
         .input('id_muestra', sql.Int, id_muestra)
         .query(`
@@ -161,7 +194,8 @@ router.get(
           WHERE e.id_ensayo IS NOT NULL
           ORDER BY p.id_parametro;
         `);
-      res.json(rs.recordset);
+  const enriched = rs.recordset.map((row) => ({ ...row, es_micro: isMicroParam(row.nombre, row.unidad) }));
+  res.json(enriched);
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Error obteniendo ensayos' });
@@ -186,10 +220,10 @@ router.post(
     try {
       const pool = await getPool();
 
-      const eRs = await pool
+    const eRs = await pool
         .request()
         .input('id_muestra', sql.Int, id_muestra)
-  .query(`SELECT e.*, p.nombre FROM Ensayo e JOIN Parametro p ON p.id_parametro = e.id_parametro WHERE e.id_muestra = @id_muestra ORDER BY e.id_ensayo`);
+  .query(`SELECT e.*, p.nombre, p.unidad FROM Ensayo e JOIN Parametro p ON p.id_parametro = e.id_parametro WHERE e.id_muestra = @id_muestra ORDER BY e.id_ensayo`);
   const ensayos = eRs.recordset;
   if (ensayos.length === 0) return res.status(400).json({ message: 'No hay ensayos registrados para esta muestra' });
 
@@ -197,25 +231,88 @@ router.post(
       if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
       const filename = `informe_${id_muestra}_${Date.now()}.pdf`;
       const filepath = path.join(uploadsDir, filename);
-      await new Promise((resolve, reject) => {
-        const doc = new PDFDocument();
-        const stream = fs.createWriteStream(filepath);
-        doc.pipe(stream);
-        doc.fontSize(16).text('Informe de Evaluación', { align: 'center' });
-        doc.moveDown();
-        doc.fontSize(12).text(`Muestra: ${id_muestra}`);
-        doc.text(`Evaluador: ${id_evaluador}`);
-        doc.moveDown();
-  doc.text(`Resultado: ${apto ? 'APTO' : 'NO APTO'}`);
-        doc.moveDown();
-        doc.text('Parámetros:', { underline: true });
-        ensayos.forEach((e) => {
-          doc.text(`- ${e.nombre}: ${e.resultado} (${e.dentro_norma ? 'Dentro de norma' : 'Fuera de norma'})`);
+
+      // Enriquecer con info de muestra y normas para el template
+      const mRs = await pool.request().input('id', sql.Int, id_muestra).query(`
+  SELECT m.id_muestra,
+               m.codigo_unico,
+               m.tipo,
+         m.condiciones_transporte AS condiciones_transporte,
+         m.condiciones_transporte AS condiciones,
+               m.fecha_recepcion,
+               m.id_solicitante,
+               s.nombre_razon_social AS solicitante_nombre,
+               s.nombre_razon_social AS nombre_razon_social,
+               s.direccion,
+               s.contacto,
+               s.correo
+        FROM dbo.Muestra m
+        LEFT JOIN dbo.Solicitante s ON s.id_solicitante = m.id_solicitante
+        WHERE m.id_muestra = @id
+      `);
+      const muestra = mRs.recordset[0] || { id_muestra, codigo_unico: '', tipo: '' };
+      // Unir normas por parámetro
+      const ensayosRich = [];
+      for (const e of ensayos) {
+        const nRs = await pool
+          .request()
+          .input('id_parametro', sql.Int, e.id_parametro)
+          .query(`
+            SELECT TOP 1 pn.operador, pn.limite_minimo, pn.limite_maximo, nr.descripcion, nr.fuente
+            FROM ParametroNorma pn
+            LEFT JOIN NormaReferencia nr ON nr.id_norma = pn.id_norma
+            WHERE pn.id_parametro = @id_parametro
+          `);
+        const n = nRs.recordset[0] || {};
+        ensayosRich.push({
+          ...e,
+          operador: n.operador,
+          limite_minimo: n.limite_minimo,
+          limite_maximo: n.limite_maximo,
+          norma_descripcion: n.descripcion,
+          norma_fuente: n.fuente,
+          unidad: e.unidad,
+          es_micro: isMicroParam(e.nombre, e.unidad)
         });
-        doc.end();
-        stream.on('finish', resolve);
-        stream.on('error', reject);
-      });
+      }
+
+      // Intenta render con plantilla HTML; fallback a PDFKit
+      try {
+        await generateInformePDF({
+          data: {
+            muestra,
+            evaluador: { id: id_evaluador },
+            apto,
+            ensayos: ensayosRich,
+            norma_descripcion: ensayosRich.find(x => x.norma_descripcion)?.norma_descripcion || '',
+            norma_fuente: ensayosRich.find(x => x.norma_fuente)?.norma_fuente || '',
+            qrText: `informe:${id_muestra}:${Date.now()}`
+          },
+          outputPath: filepath
+        })
+      } catch (e) {
+        console.error('HTML-to-PDF failed, falling back to PDFKit:', e?.message || e)
+        // Fallback sencillo con PDFKit
+        await new Promise((resolve, reject) => {
+          const doc = new PDFDocument();
+          const stream = fs.createWriteStream(filepath);
+          doc.pipe(stream);
+          doc.fontSize(16).text('Informe de Evaluación', { align: 'center' });
+          doc.moveDown();
+          doc.fontSize(12).text(`Muestra: ${id_muestra}`);
+          doc.text(`Evaluador: ${id_evaluador}`);
+          doc.moveDown();
+          doc.text(`Resultado: ${apto ? 'APTO' : 'NO APTO'}`);
+          doc.moveDown();
+          doc.text('Parámetros:', { underline: true });
+          ensayos.forEach((e) => {
+            doc.text(`- ${e.nombre}: ${e.resultado} (${e.dentro_norma ? 'Dentro de norma' : 'Fuera de norma'})`);
+          });
+          doc.end();
+          stream.on('finish', resolve);
+          stream.on('error', reject);
+        });
+      }
 
       const ruta_pdf = `/files/${filename}`;
 

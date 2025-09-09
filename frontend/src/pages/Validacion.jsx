@@ -99,6 +99,11 @@ export default function Validacion() {
   return (
     <div style={{ display: 'grid', gap: 16, padding: 16 }}>
       <h2>Validación</h2>
+      {pendientes.length > 0 && (
+        <div style={{ background: '#fff3cd', border: '1px solid #ffeeba', color: '#856404', padding: 8, borderRadius: 4 }}>
+          Tienes {pendientes.length} muestras pendientes de asignar a un evaluador.
+        </div>
+      )}
 
       <form onSubmit={asignar} style={{ display: 'grid', gap: 8 }}>
         <strong>Asignar Evaluador</strong>

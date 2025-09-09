@@ -1,0 +1,174 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <% if (typeof cssHref !== 'undefined' && cssHref) { %>
+      <link rel="stylesheet" href="<%= cssHref %>">
+    <% } %>
+    <title>Informe</title>
+  </head>
+  <body>
+    <div class="header">
+      <div class="left">
+        <% if (typeof logoUrl !== 'undefined' && logoUrl) { %>
+          <img src="<%= logoUrl %>" alt="logo" />
+        <% } %>
+      </div>
+      <div class="text">
+        <div class="title">Dirección General de Medicamentos, Alimentos y Productos Sanitarios (DIGEMAPS)</div>
+        <div>Laboratorio de Evaluación de Productos de Consumo Humano (LEPCH)</div>
+        <div>Laboratorio de Análisis de Alimentos y Bebidas</div>
+        <div>C/Santo Tomás de Aquino esq. Correa y Cidrón. Gazcue, Santo Domingo R.D.</div>
+        <div style="text-align:center; font-weight:bold; margin-top:4px">INFORME DE RESULTADOS</div>
+      </div>
+      <div class="right"></div>
+    </div>
+
+  <table class="table meta" style="margin-top:6px">
+      <tbody>
+        <tr>
+          <td style="width:25%">Numero de Trámite</td>
+          <td style="width:35%"><%= muestra?.codigo_unico || '' %></td>
+          <td style="width:20%">Número de Muestra</td>
+          <td style="width:20%" align="right"><%= muestra?.id_muestra %></td>
+        </tr>
+        <tr>
+          <td>Fecha de Recibo</td>
+          <td><%= muestra?.fecha_recepcion ? new Date(muestra.fecha_recepcion).toLocaleDateString() : '' %></td>
+          <td>Tipo de Muestra</td>
+          <td align="right"><%= muestra?.tipo || '' %></td>
+        </tr>
+        <tr>
+          <td>Nombre del Solicitante</td>
+          <td colspan="3"><%= muestra?.solicitante_nombre || '' %></td>
+        </tr>
+        <tr>
+          <td>Dirección</td>
+          <td colspan="3"><%= muestra?.direccion || '' %></td>
+        </tr>
+        <tr>
+          <td>Razón Social</td>
+          <td colspan="3"><%= muestra?.nombre_razon_social || '' %></td>
+        </tr>
+        <tr>
+          <td>Motivo de la Solicitud</td>
+          <td colspan="3">NUEVO</td>
+        </tr>
+        <tr>
+          <td>Cond. de la Muestra</td>
+          <td colspan="3"><%= muestra?.condiciones_transporte || '' %></td>
+        </tr>
+      </tbody>
+    </table>
+
+  <table class="table meta meta-6" style="margin-top:8px">
+      <tbody>
+        <tr>
+          <td>Color</td>
+          <td class="value"></td>
+          <td>Olor</td>
+          <td class="value"><span style="color:var(--muted)">Propio del Producto</span></td>
+          <td>Sabor</td>
+          <td class="value"><span style="color:var(--muted)">Propio del Producto</span></td>
+        </tr>
+        <tr>
+          <td>Aspecto</td>
+          <td class="value">-</td>
+          <td>Textura</td>
+          <td class="value">-</td>
+          <td></td>
+          <td class="value"></td>
+        </tr>
+        <tr>
+          <td>Peso Neto</td>
+          <td class="value">-</td>
+          <td>Fecha Vence</td>
+          <td class="value">-</td>
+          <td></td>
+          <td class="value"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="margin-top:10px; font-weight:bold">Análisis Fisicoquímicos</div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Parámetro</th>
+          <th>Resultados</th>
+          <th>LIMITES DE CONFIANZA</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% (ensayos || []).filter(e => !e.es_micro).forEach((e) => { %>
+          <tr>
+            <td><%= e.nombre %></td>
+            <td><%= e.resultado %> <%= e.unidad || '' %></td>
+            <td>
+              <% if (e.operador) { %>
+                <%= e.operador %>
+                <%= e.limite_minimo != null ? ' ' + e.limite_minimo : '' %>
+                <%= e.limite_maximo != null ? ' - ' + e.limite_maximo : '' %>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+
+    <div style="margin-top:10px; font-weight:bold">Análisis Microbiológicos</div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Parámetro</th>
+          <th>Resultados</th>
+          <th>LIMITES DE CONFIANZA</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% (ensayos || []).filter(e => e.es_micro).forEach((e) => { %>
+          <tr>
+            <td><%= e.nombre %></td>
+            <td><%= e.resultado %> <%= e.unidad || '' %></td>
+            <td>
+              <% if (e.operador) { %>
+                <%= e.operador %>
+                <%= e.limite_minimo != null ? ' ' + e.limite_minimo : '' %>
+                <%= e.limite_maximo != null ? ' - ' + e.limite_maximo : '' %>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+
+    <div style="text-align:center; font-weight:bold; margin:6px 0">NO HAY MÁS RESULTADOS DEBAJO DE ESTA LÍNEA</div>
+
+    <div style="margin-top:8px">
+      <div><strong>Metodologías o Referencias:</strong> <%= norma_descripcion || '' %> <span style="float:right">NORDOM 64</span></div>
+      <div><%= norma_fuente || '' %></div>
+      <div><strong>Equipos:</strong> Los aplicables a estos ensayos.</div>
+  <div><strong>Observación:</strong> <%= (typeof observacion !== 'undefined' && observacion) ? observacion : 'Sin Normas de Referencia' %></div>
+    </div>
+
+    <div style="display:flex; gap:24px; margin:10px 0">
+      <label><input type="checkbox" <%= apto ? 'checked' : '' %> /> Apto Para Consumo</label>
+      <label><input type="checkbox" <%= !apto ? 'checked' : '' %> /> No Apto Para Consumo</label>
+    </div>
+
+    <div style="display:flex; gap:24px; margin:10px 0">
+      <div>Original <input type="checkbox" /></div>
+      <div>Copia <input type="checkbox" /></div>
+  <div style="margin-left:auto"><% if (typeof qrDataUrl !== 'undefined' && qrDataUrl) { %><img src="<%= qrDataUrl %>" alt="qr" style="height:64px" /><% } %></div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; margin-top:40px">
+      <div style="width:45%; text-align:center">
+        <div style="border-top:1px solid #000; padding-top:4px">Encargado(a) de Departamento</div>
+      </div>
+      <div style="width:45%; text-align:center">
+        <div style="border-top:1px solid #000; padding-top:4px">Director(a)</div>
+      </div>
+    </div>
+  </body>
+</html>
