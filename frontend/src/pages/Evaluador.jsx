@@ -35,21 +35,59 @@ export default function Evaluador() {
   setApto(false)
   }
 
-  async function guardarParametro(id_parametro) {
-  const r = resultados[id_parametro]
-  if (!r || r.resultado == null || r.resultado === '') return setMsg('Completa el resultado')
-    await api.post('/api/ensayos', {
-      id_muestra: seleccion.id_muestra,
-      id_parametro,
-      resultado: r.resultado,
-      dentro_norma: !!r.dentro_norma
+
+  async function guardarTodosParametros() {
+    if (!seleccion) return
+    // Tomar solo los parámetros que tengan valor no vacío
+    const aGuardar = parametros.filter(p => {
+      const r = resultados[p.id_parametro]
+      return r && r.resultado != null && r.resultado !== ''
     })
-    // Keep saved value reflected locally
-    setResultados(prev => ({
-      ...prev,
-      [id_parametro]: { resultado: r.resultado, dentro_norma: !!r.dentro_norma },
-    }))
-    setMsg('Parámetro guardado')
+    if (aGuardar.length === 0) {
+      setMsg('No hay parámetros con resultado para guardar')
+      return
+    }
+    setMsg('Guardando...')
+    try {
+      await Promise.all(aGuardar.map(p => {
+        const r = resultados[p.id_parametro]
+        return api.post('/api/ensayos', {
+          id_muestra: seleccion.id_muestra,
+          id_parametro: p.id_parametro,
+          resultado: r.resultado,
+          dentro_norma: !!r.dentro_norma
+        })
+      }))
+      setMsg(`${aGuardar.length} parámetro(s) guardado(s)`) 
+    } catch (err) {
+      setMsg('Error al guardar parámetros')
+    }
+  }
+
+  function evaluarDentroNorma(parametro, valorStr) {
+    if (!parametro) return false;
+    if (valorStr == null || valorStr === '') return false;
+    const vNum = parseFloat(String(valorStr).replace(',', '.'));
+    if (!Number.isFinite(vNum)) {
+      // Heurística simple para microbiológico: si texto contiene 'ausente' / 'negativo' => dentro
+      const txt = valorStr.toString().toLowerCase();
+      if (/(ausente|negativo|no\s*detectado)/.test(txt)) return true;
+      return false;
+    }
+    const op = (parametro.operador || '').toUpperCase();
+    const min = parametro.limite_minimo;
+    const max = parametro.limite_maximo;
+    if (op === 'BETWEEN' && min != null && max != null) return vNum >= min && vNum <= max;
+    if (op === '<=' && max != null) return vNum <= max;
+    if (op === '<' && max != null) return vNum < max;
+    if (op === '>=' && min != null) return vNum >= min;
+    if (op === '>' && min != null) return vNum > min;
+    if (op === '=' && min != null) return vNum === min;
+    // Sin operador: deducir
+    if (min != null && max != null) return vNum >= min && vNum <= max;
+    if (max != null) return vNum <= max;
+    if (min != null) return vNum >= min;
+    return false;
   }
 
   async function completarEvaluacion() {
@@ -118,18 +156,29 @@ export default function Evaluador() {
                       </div>
                       <div className="field-row">
                         <input placeholder="Resultado" value={resultados[p.id_parametro]?.resultado || ''}
-                          onChange={e => setResultados({ ...resultados, [p.id_parametro]: { ...(resultados[p.id_parametro] || {}), resultado: e.target.value } })} />
+                          onChange={e => {
+                            const val = e.target.value;
+                            const autoDentro = evaluarDentroNorma(p, val);
+                            setResultados({
+                              ...resultados,
+                              [p.id_parametro]: {
+                                ...(resultados[p.id_parametro] || {}),
+                                resultado: val,
+                                dentro_norma: autoDentro
+                              }
+                            })
+                          }} />
                         <label>
                           <input type="checkbox" checked={!!resultados[p.id_parametro]?.dentro_norma}
                             onChange={e => setResultados({ ...resultados, [p.id_parametro]: { ...(resultados[p.id_parametro] || {}), dentro_norma: e.target.checked } })} /> Dentro de norma
                         </label>
-                        <button className="btn btn-outline" onClick={() => guardarParametro(p.id_parametro)}>Guardar</button>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-              <div style={{ marginTop: 8 }}>
+              <div style={{ marginTop: 8, display: 'flex', gap: 12 }}>
+                <button className="btn btn-primary" onClick={guardarTodosParametros}>Guardar todos</button>
                 <label style={{ marginRight: 12 }}>
                   <input type="checkbox" checked={apto} onChange={e => setApto(e.target.checked)} /> Apto Para Consumo
                 </label>
