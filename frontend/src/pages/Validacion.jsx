@@ -179,7 +179,9 @@ export default function Validacion() {
                   <div style={{ marginBottom: 8 }}>Vista previa del PDF</div>
                   {(() => {
                     const inf = informes.find(i => String(i.id_informe) === String(validar.id_informe))
-                    const src = inf?.ruta_pdf ? (inf.ruta_pdf.startsWith('http') ? inf.ruta_pdf : `${api.defaults.baseURL}${inf.ruta_pdf}`) : null
+                    const token = localStorage.getItem('token')
+                    const srcBase = inf?.download_url ? `${api.defaults.baseURL}${inf.download_url}` : null
+                    const src = srcBase ? (srcBase.includes('?') ? `${srcBase}&token=${encodeURIComponent(token || '')}` : `${srcBase}?token=${encodeURIComponent(token || '')}`) : null
                     return src ? (
                       <iframe title="informe" src={src} style={{ width: '100%', height: 400, border: 'none' }} />
                     ) : (
@@ -257,7 +259,15 @@ export default function Validacion() {
                     <td>{i.version}</td>
                     <td>{i.estado || '—'}</td>
                     <td>{i.fecha_creacion ? new Date(i.fecha_creacion).toLocaleString() : '—'}</td>
-                    <td>{i.ruta_pdf ? <a href={`${api.defaults.baseURL}${i.ruta_pdf}`} target="_blank" rel="noreferrer">Ver PDF</a> : '—'}</td>
+                    <td>
+                      {(() => {
+                        const token = localStorage.getItem('token')
+                        const base = i.download_url ? `${api.defaults.baseURL}${i.download_url}` : null
+                        if (!base) return '—'
+                        const href = base.includes('?') ? `${base}&token=${encodeURIComponent(token || '')}` : `${base}?token=${encodeURIComponent(token || '')}`
+                        return <a href={href} target="_blank" rel="noreferrer">Ver PDF</a>
+                      })()}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -309,9 +319,13 @@ export default function Validacion() {
                   <td>{m.codigo_unico}</td>
                   <td>{m.tipo}</td>
                   <td>
-                    {m.ruta_pdf ? (
-                      <a href={`${api.defaults.baseURL}${m.ruta_pdf}`} target="_blank" rel="noreferrer">Ver PDF</a>
-                    ) : '—'}
+                    {(() => {
+                      const token = localStorage.getItem('token')
+                      const base = m.id_informe ? `${api.defaults.baseURL}/api/informes/${m.id_informe}/pdf` : null
+                      if (!base) return '—'
+                      const href = base.includes('?') ? `${base}&token=${encodeURIComponent(token || '')}` : `${base}?token=${encodeURIComponent(token || '')}`
+                      return <a href={href} target="_blank" rel="noreferrer">Ver PDF</a>
+                    })()}
                   </td>
                 </tr>
               ))}

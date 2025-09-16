@@ -18,7 +18,6 @@ const PORT = process.env.PORT || 4000;
 
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') || '*', credentials: true }));
 app.use(express.json());
-app.use('/files', express.static(path.resolve(process.cwd(), 'uploads')));
 
 // Healthcheck
 app.get('/health', async (req, res) => {

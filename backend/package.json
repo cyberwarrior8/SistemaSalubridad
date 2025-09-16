@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "seed": "node src/seed/seed.js"
+  "seed": "node src/seed/seed.js",
+  "migrate:pdfs:dry": "node src/scripts/migratePdfsToDb.js --dry-run",
+  "migrate:pdfs": "node src/scripts/migratePdfsToDb.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

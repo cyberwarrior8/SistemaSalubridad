@@ -59,7 +59,7 @@ function resolveBrowserExecutable() {
   return null
 }
 
-export async function generateInformePDF({ template = 'informe', data, outputPath }) {
+export async function generateInformePDF({ template = 'informe', data, outputPath, returnBuffer = false }) {
   // Prepare QR as data URL if not present
   if (!data.qrDataUrl && data.qrText) {
     data.qrDataUrl = await QRCode.toDataURL(data.qrText)
@@ -81,7 +81,8 @@ export async function generateInformePDF({ template = 'informe', data, outputPat
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'load' })
     await page.emulateMediaType('screen')
-    await page.pdf({ path: outputPath, format: 'A4', printBackground: true, margin: { top: '15mm', right: '12mm', bottom: '15mm', left: '12mm' } })
+  const pdfBuffer = await page.pdf({ path: returnBuffer ? undefined : outputPath, format: 'A4', printBackground: true, margin: { top: '15mm', right: '12mm', bottom: '15mm', left: '12mm' } })
+  if (returnBuffer) return pdfBuffer
   } finally {
     if (browser) await browser.close()
   }

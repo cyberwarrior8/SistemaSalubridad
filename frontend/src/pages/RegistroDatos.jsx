@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import api from '../lib/api'
 
 export default function RegistroDatos() {
-  const [sol, setSol] = useState({ nombre: '', direccion: '', contacto: '' })
-  const [muestra, setMuestra] = useState({ codigo: '', tipo: 'Agua', fecha: '', hora: '', origen: '', condiciones: '', id_solicitante: '' })
+  const [sol, setSol] = useState({ nombre: '', direccion: '', contacto: '', cedula: '' })
+  const [muestra, setMuestra] = useState({ tipo: 'Agua', fecha: '', hora: '', origen: '', condiciones: '', id_solicitante: '' })
+  const [condOpcion, setCondOpcion] = useState('') // opción del combobox de condiciones
   const [solicitantes, setSolicitantes] = useState([])
   const [buscar, setBuscar] = useState('')
   const [msg, setMsg] = useState('')
@@ -32,10 +33,17 @@ export default function RegistroDatos() {
     setMsgType('')
     setLoadingSolicitante(true)
     try {
+      // Validar cédula (opcional): si llenó algo debe ser 11 dígitos
+      if (!/^\d{11}$/.test(sol.cedula)) {
+        setMsg('La cédula es obligatoria (11 dígitos)')
+        setMsgType('error')
+        setLoadingSolicitante(false)
+        return
+      }
       await api.post('/api/solicitantes', sol)
       setMsg('Solicitante creado')
       setMsgType('success')
-      setSol({ nombre: '', direccion: '', contacto: '' })
+      setSol({ nombre: '', direccion: '', contacto: '', cedula: '' })
       await cargarSolicitantes()
     } catch (err) {
       const status = err?.response?.status
@@ -59,12 +67,7 @@ export default function RegistroDatos() {
     e.preventDefault()
     setMsg('')
     setMsgType('')
-    // Client-side validations
-    if (!muestra.codigo || muestra.codigo.trim().length < 3) {
-      setMsg('El código debe tener al menos 3 caracteres')
-      setMsgType('error')
-      return
-    }
+  // Client-side validations
     if (!['Agua','Alimento','Bebida'].includes(muestra.tipo)) {
       setMsg('Seleccione un tipo de muestra válido')
       setMsgType('error')
@@ -87,10 +90,16 @@ export default function RegistroDatos() {
     }
     setLoadingMuestra(true)
     try {
-      await api.post('/api/muestras', { ...muestra, id_solicitante: parseInt(muestra.id_solicitante, 10) })
-      setMsg('Muestra creada correctamente')
+      const payload = { ...muestra, id_solicitante: parseInt(muestra.id_solicitante, 10) }
+      // Mapear select de condiciones al campo de texto: si seleccionó una opción distinta de 'Otro', usarla
+      if (condOpcion && condOpcion !== 'Otro') {
+        payload.condiciones = condOpcion
+      }
+      const { data } = await api.post('/api/muestras', payload)
+      setMsg(`Muestra creada correctamente. Código: ${data?.codigo_unico || ''}`)
       setMsgType('success')
-      setMuestra({ codigo: '', tipo: 'Agua', fecha: '', hora: '', origen: '', condiciones: '', id_solicitante: '' })
+      setMuestra({ tipo: 'Agua', fecha: '', hora: '', origen: '', condiciones: '', id_solicitante: '' })
+      setCondOpcion('')
     } catch (err) {
       const status = err?.response?.status
       const errors = err?.response?.data?.errors
@@ -100,7 +109,7 @@ export default function RegistroDatos() {
       } else if (status === 403) {
         setMsg('No tiene permisos para registrar muestras')
       } else if (status === 409) {
-        setMsg('El código de muestra ya existe')
+        setMsg('Conflicto al generar el código. Intente nuevamente.')
       } else {
         setMsg([message || 'No se pudo registrar la muestra', details].filter(Boolean).join(' - '))
       }
@@ -120,7 +129,8 @@ export default function RegistroDatos() {
             <input placeholder="Nombre / Razón Social" value={sol.nombre} onChange={e => setSol({ ...sol, nombre: e.target.value })} />
             <input placeholder="Dirección" value={sol.direccion} onChange={e => setSol({ ...sol, direccion: e.target.value })} />
             <input placeholder="Contacto" value={sol.contacto} onChange={e => setSol({ ...sol, contacto: e.target.value })} />
-            <button className="btn btn-primary" disabled={loadingSolicitante}>{loadingSolicitante ? 'Creando…' : 'Crear Solicitante'}</button>
+            <input placeholder="Cédula (11 dígitos)*" value={sol.cedula} onChange={e => setSol({ ...sol, cedula: e.target.value })} />
+            <button className="btn btn-primary" disabled={loadingSolicitante || !/^\d{11}$/.test(sol.cedula)}>{loadingSolicitante ? 'Creando…' : 'Crear Solicitante'}</button>
           </div>
         </form>
 
@@ -128,7 +138,6 @@ export default function RegistroDatos() {
           <div className="card-header">Nueva Muestra</div>
           <div className="card-body" style={{ display: 'grid', gap: 10 }}>
             <div className="field-row">
-              <input placeholder="Código" value={muestra.codigo} onChange={e => setMuestra({ ...muestra, codigo: e.target.value })} />
               <select value={muestra.tipo} onChange={e => setMuestra({ ...muestra, tipo: e.target.value })}>
                 <option>Agua</option>
                 <option>Alimento</option>
@@ -140,7 +149,22 @@ export default function RegistroDatos() {
               <input type="time" value={muestra.hora} onChange={e => setMuestra({ ...muestra, hora: e.target.value })} />
             </div>
             <input placeholder="Origen" value={muestra.origen} onChange={e => setMuestra({ ...muestra, origen: e.target.value })} />
-            <input placeholder="Condiciones de transporte" value={muestra.condiciones} onChange={e => setMuestra({ ...muestra, condiciones: e.target.value })} />
+            <div className="field">
+              <label>Condiciones de transporte</label>
+              <select value={condOpcion} onChange={e => setCondOpcion(e.target.value)}>
+                <option value="">Seleccione…</option>
+                <option value="Refrigerada (2-8°C)">Refrigerada (2-8°C)</option>
+                <option value="Congelada (-20°C)">Congelada (-20°C)</option>
+                <option value="Temperatura ambiente">Temperatura ambiente</option>
+                <option value="Cadena de frío establecida">Cadena de frío establecida</option>
+                <option value="Conservante agregado">Conservante agregado</option>
+                <option value="Protegida de la luz">Protegida de la luz</option>
+                <option value="Otro">Otro</option>
+              </select>
+              {(condOpcion === 'Otro' || !condOpcion) && (
+                <input placeholder="Describa condiciones" value={muestra.condiciones} onChange={e => setMuestra({ ...muestra, condiciones: e.target.value })} />
+              )}
+            </div>
             <div className="field">
               <label>Solicitante</label>
               <input placeholder="Buscar por nombre o contacto" value={buscar} onChange={e => setBuscar(e.target.value)} />

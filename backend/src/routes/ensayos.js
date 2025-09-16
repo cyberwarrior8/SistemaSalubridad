@@ -56,7 +56,7 @@ router.get('/asignadas', authRequired, requireRoles('Evaluador'), async (req, re
           WHERE id_muestra = m.id_muestra AND id_usuario_responsable = @id_usuario
           ORDER BY fecha_asignacion DESC, id_bitacora DESC
         ) lb
-        WHERE m.estado_actual = N'En análisis'
+  WHERE m.estado_actual = N'En análisis' AND m.eliminada = 0
         ORDER BY m.id_muestra DESC;
       `);
     res.json(rs.recordset);
@@ -73,7 +73,7 @@ router.get('/muestras/:id/parametros', authRequired, requireRoles('Evaluador'), 
   const id = parseInt(req.params.id, 10);
   try {
     const pool = await getPool();
-    const tipoRs = await pool.request().input('id', sql.Int, id).query('SELECT tipo FROM Muestra WHERE id_muestra = @id');
+  const tipoRs = await pool.request().input('id', sql.Int, id).query('SELECT tipo FROM Muestra WHERE id_muestra = @id AND eliminada = 0');
     const tipo = tipoRs.recordset[0]?.tipo;
     if (!tipo) return res.status(404).json({ message: 'Muestra no encontrada' });
 
@@ -232,10 +232,7 @@ router.post(
   const ensayos = eRs.recordset;
   if (ensayos.length === 0) return res.status(400).json({ message: 'No hay ensayos registrados para esta muestra' });
 
-      const uploadsDir = path.resolve(process.cwd(), 'uploads');
-      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
-      const filename = `informe_${id_muestra}_${Date.now()}.pdf`;
-      const filepath = path.join(uploadsDir, filename);
+  const filename = `informe_${id_muestra}_${Date.now()}.pdf`;
 
       // Enriquecer con info de muestra y normas para el template
       const mRs = await pool.request().input('id', sql.Int, id_muestra).query(`
@@ -282,8 +279,9 @@ router.post(
       }
 
       // Intenta render con plantilla HTML; fallback a PDFKit
+      let pdfBuffer = null;
       try {
-        await generateInformePDF({
+        pdfBuffer = await generateInformePDF({
           data: {
             muestra,
             evaluador: { id: id_evaluador },
@@ -293,15 +291,17 @@ router.post(
             norma_fuente: ensayosRich.find(x => x.norma_fuente)?.norma_fuente || '',
             qrText: `informe:${id_muestra}:${Date.now()}`
           },
-          outputPath: filepath
+          outputPath: 'ignored.pdf',
+          returnBuffer: true
         })
       } catch (e) {
         console.error('HTML-to-PDF failed, falling back to PDFKit:', e?.message || e)
         // Fallback sencillo con PDFKit
-        await new Promise((resolve, reject) => {
+        pdfBuffer = await new Promise((resolve, reject) => {
           const doc = new PDFDocument();
-          const stream = fs.createWriteStream(filepath);
-          doc.pipe(stream);
+          const chunks = [];
+          doc.on('data', (c) => chunks.push(c));
+          doc.on('end', () => resolve(Buffer.concat(chunks)));
           doc.fontSize(16).text('Informe de Evaluación', { align: 'center' });
           doc.moveDown();
           doc.fontSize(12).text(`Muestra: ${id_muestra}`);
@@ -314,26 +314,45 @@ router.post(
             doc.text(`- ${e.nombre}: ${e.resultado} (${e.dentro_norma ? 'Dentro de norma' : 'Fuera de norma'})`);
           });
           doc.end();
-          stream.on('finish', resolve);
-          stream.on('error', reject);
         });
       }
-
-      const ruta_pdf = `/files/${filename}`;
 
       await pool
         .request()
         .input('id_muestra', sql.Int, id_muestra)
         .input('id_evaluador', sql.Int, id_evaluador)
-        .input('ruta_pdf', sql.NVarChar(255), ruta_pdf)
+        .input('ruta_pdf', sql.NVarChar(255), null)
         .execute('sp_CrearInforme');
+
+      // Obtener id_informe recién creado
+      const infoRs = await pool
+        .request()
+        .input('id_muestra', sql.Int, id_muestra)
+        .query('SELECT TOP 1 id_informe FROM dbo.Informe WHERE id_muestra = @id_muestra ORDER BY id_informe DESC');
+      const id_informe = infoRs.recordset[0]?.id_informe;
+
+      // Guardar PDF en base de datos (VARBINARY) si existe archivo
+    if (id_informe && pdfBuffer) {
+        await pool
+          .request()
+          .input('id_informe', sql.Int, id_informe)
+      .input('contenido_pdf', sql.VarBinary(sql.MAX), pdfBuffer)
+          .input('nombre_pdf', sql.NVarChar(255), filename)
+          .query(`
+            MERGE dbo.InformeArchivo AS tgt
+            USING (SELECT @id_informe AS id_informe) AS src
+            ON tgt.id_informe = src.id_informe
+            WHEN MATCHED THEN UPDATE SET contenido_pdf = @contenido_pdf, nombre_pdf = @nombre_pdf
+            WHEN NOT MATCHED THEN INSERT (id_informe, contenido_pdf, nombre_pdf) VALUES (@id_informe, @contenido_pdf, @nombre_pdf);
+          `);
+      }
 
       await pool
         .request()
         .input('id_muestra', sql.Int, id_muestra)
         .query(`UPDATE Muestra SET estado_actual = N'En Espera' WHERE id_muestra = @id_muestra`);
 
-  res.json({ message: 'Evaluación completada', apto, ruta_pdf });
+  res.json({ message: 'Evaluación completada', apto, id_informe });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Error completando evaluación' });

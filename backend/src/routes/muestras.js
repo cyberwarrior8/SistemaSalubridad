@@ -24,7 +24,7 @@ function parseTimeToDate(horaStr) {
 router.get('/', authRequired, async (req, res) => {
   try {
     const pool = await getPool();
-    const rs = await pool.request().query('SELECT TOP 100 * FROM Muestra ORDER BY id_muestra DESC');
+  const rs = await pool.request().query('SELECT TOP 100 * FROM Muestra WHERE eliminada = 0 ORDER BY id_muestra DESC');
     res.json(rs.recordset);
   } catch (err) {
     console.error(err);
@@ -39,7 +39,7 @@ router.get('/pendientes', authRequired, requireRoles('Validacion'), async (req, 
     const rs = await pool.request().query(`
       SELECT m.*
       FROM Muestra m
-      WHERE m.estado_actual = N'Recibida'
+  WHERE m.estado_actual = N'Recibida' AND m.eliminada = 0
       ORDER BY m.fecha_recepcion DESC, m.id_muestra DESC
     `);
     res.json(rs.recordset);
@@ -63,7 +63,7 @@ router.get('/en-analisis', authRequired, requireRoles('Validacion'), async (req,
         ORDER BY b.fecha_asignacion DESC, b.id_bitacora DESC
       ) last_b
       LEFT JOIN Usuario u ON u.id_usuario = last_b.id_usuario_responsable
-      WHERE m.estado_actual = N'En análisis'
+  WHERE m.estado_actual = N'En análisis' AND m.eliminada = 0
       ORDER BY m.fecha_recepcion DESC, m.id_muestra DESC;
     `);
     res.json(rs.recordset);
@@ -80,7 +80,7 @@ router.get('/evaluadas', authRequired, requireRoles('Validacion'), async (req, r
     const rs = await pool.request().query(`
       SELECT m.*
       FROM Muestra m
-  WHERE m.estado_actual = N'En Espera'
+  WHERE m.estado_actual = N'En Espera' AND m.eliminada = 0
       ORDER BY m.fecha_recepcion DESC, m.id_muestra DESC;
     `);
     res.json(rs.recordset);
@@ -94,10 +94,6 @@ router.post(
   '/',
   authRequired,
   requireRoles('Registro de Datos'),
-  body('codigo')
-    .trim()
-    .notEmpty().withMessage('El código es requerido')
-    .isLength({ min: 3, max: 50 }).withMessage('El código debe tener entre 3 y 50 caracteres'),
   body('tipo')
     .isIn(['Agua', 'Alimento', 'Bebida']).withMessage('Tipo inválido'),
   body('fecha')
@@ -112,7 +108,7 @@ router.post(
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const { codigo, tipo, fecha, hora, origen, condiciones, id_solicitante } = req.body;
+  const { tipo, fecha, hora, origen, condiciones, id_solicitante } = req.body;
 
     // Normalizar y convertir hora a Date para tipo TIME
     const normalizedHora = /^\d{2}:\d{2}$/.test(hora) ? `${hora}:00` : hora;
@@ -123,9 +119,8 @@ router.post(
 
     try {
       const pool = await getPool();
-      await pool
+  const rs = await pool
         .request()
-        .input('codigo', sql.NVarChar(50), codigo)
         .input('tipo', sql.NVarChar(50), tipo)
         .input('fecha', sql.Date, fecha)
   .input('hora', sql.Time, horaDate)
@@ -133,15 +128,17 @@ router.post(
         .input('condiciones', sql.NVarChar(255), condiciones || null)
         .input('id_solicitante', sql.Int, id_solicitante)
         .execute('sp_RegistrarMuestra');
-
-      res.status(201).json({ message: 'Muestra registrada' });
+  // Nuevo SP devuelve id_muestra y codigo_unico
+  const out = rs?.recordset?.[0] || {};
+  res.status(201).json({ message: 'Muestra registrada', id_muestra: out.id_muestra, codigo_unico: out.codigo_unico });
     } catch (err) {
       console.error(err);
       // SQL Server error mapping
       // 2627/2601: Unique violation, 8152/2628: String truncation, 547: Constraint violation (FK/CHECK)
   const number = err?.number || err?.originalError?.info?.number
+      // Unique violation improbable ahora; aún manejamos por si hay duplicado de código
       if (number === 2627 || number === 2601) {
-        return res.status(409).json({ message: 'El código de muestra ya existe' });
+        return res.status(409).json({ message: 'Conflicto de código generado, intente de nuevo' });
       }
       if (number === 8152 || number === 2628) {
         return res.status(400).json({ message: 'Longitud de campo excedida (código ≤ 50, origen ≤ 150, condiciones ≤ 255)' });
@@ -208,7 +205,7 @@ router.get('/validadas', authRequired, requireRoles('Validacion'), async (req, r
         WHERE i.id_muestra = m.id_muestra
         ORDER BY i.id_informe DESC
       ) i
-      WHERE m.estado_actual = N'Validada'
+  WHERE m.estado_actual = N'Validada' AND m.eliminada = 0
       ORDER BY m.fecha_recepcion DESC, m.id_muestra DESC;
     `);
     res.json(rs.recordset);
@@ -233,63 +230,21 @@ router.delete(
       const pool = await getPool();
 
       // Verificar existencia y estado
-      const mRs = await pool.request().input('id', sql.Int, id).query('SELECT estado_actual FROM dbo.Muestra WHERE id_muestra = @id');
-      if (mRs.recordset.length === 0) return res.status(404).json({ message: 'Muestra no encontrada' });
+      const mRs = await pool.request().input('id', sql.Int, id).query('SELECT estado_actual, eliminada FROM dbo.Muestra WHERE id_muestra = @id');
+      if (mRs.recordset.length === 0 || mRs.recordset[0].eliminada) return res.status(404).json({ message: 'Muestra no encontrada o ya eliminada' });
       const estado = mRs.recordset[0].estado_actual || '';
       if (estado !== 'Recibida') {
-        return res.status(409).json({ message: 'Solo se puede eliminar una muestra no asignada (estado: Recibida)' });
+        return res.status(409).json({ message: 'Solo se puede eliminar lógicamente una muestra no asignada (estado: Recibida)' });
       }
 
-      // Obtener rutas de PDFs para limpieza posterior
-      const pdfRs = await pool
-        .request()
-        .input('id', sql.Int, id)
-        .query('SELECT ruta_pdf FROM dbo.Informe WHERE id_muestra = @id AND ruta_pdf IS NOT NULL');
-      const rutas = pdfRs.recordset.map(r => r.ruta_pdf).filter(Boolean);
+      // Baja lógica: marcar como eliminada
+      await pool.request().input('id', sql.Int, id).query('UPDATE dbo.Muestra SET eliminada = 1 WHERE id_muestra = @id');
 
-      // Borrar en transacción respetando FKs
-      const tx = new sql.Transaction(pool);
-      await tx.begin();
-      try {
-        const tReq = new sql.Request(tx);
-        await tReq.input('id', sql.Int, id).query(`
-          DELETE HI
-          FROM dbo.HistorialInforme HI
-          INNER JOIN dbo.Informe I ON I.id_informe = HI.id_informe
-          WHERE I.id_muestra = @id;
-        `);
-        await tReq.query('DELETE FROM dbo.Informe WHERE id_muestra = @id');
-        await tReq.query('DELETE FROM dbo.Ensayo WHERE id_muestra = @id');
-        await tReq.query('DELETE FROM dbo.MuestraParametroAsignado WHERE id_muestra = @id');
-        await tReq.query('DELETE FROM dbo.BitacoraMuestra WHERE id_muestra = @id');
-        await tReq.query('DELETE FROM dbo.Notificacion WHERE id_muestra = @id');
-        await tReq.query('DELETE FROM dbo.HistorialEstadoMuestra WHERE id_muestra = @id');
-        await tReq.query('DELETE FROM dbo.Muestra WHERE id_muestra = @id');
-        await tx.commit();
-      } catch (e) {
-        await tx.rollback();
-        throw e;
-      }
-
-      // Limpieza de archivos PDF (best-effort)
-      const uploadsDir = path.resolve(process.cwd(), 'uploads');
-      for (const ruta of rutas) {
-        try {
-          const filename = ruta.startsWith('/files/') ? ruta.slice('/files/'.length) : ruta.replace(/^\\?files[\\/]/i, '');
-          if (!filename) continue;
-          const fpath = path.join(uploadsDir, filename);
-          if (fs.existsSync(fpath)) fs.unlinkSync(fpath);
-        } catch {}
-      }
-
-      res.json({ message: 'Muestra eliminada' });
+      res.json({ message: 'Muestra eliminada (baja lógica)' });
     } catch (err) {
       console.error(err);
       const number = err?.number || err?.originalError?.info?.number;
-      if (number === 547) {
-        return res.status(409).json({ message: 'No se puede eliminar por dependencias de base de datos' });
-      }
-      res.status(500).json({ message: 'Error eliminando muestra' });
+      res.status(500).json({ message: 'Error eliminando lógicamente la muestra', code: number });
     }
   }
 );

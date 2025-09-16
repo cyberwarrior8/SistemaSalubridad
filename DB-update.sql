@@ -1,6 +1,34 @@
 USE SistemaSalubridad;
 GO
 
+-- Create table to store Informe PDF content in DB (idempotent)
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    WHERE t.name = N'InformeArchivo' AND t.schema_id = SCHEMA_ID(N'dbo')
+)
+BEGIN
+    CREATE TABLE dbo.InformeArchivo (
+        id_informe INT NOT NULL PRIMARY KEY,
+        contenido_pdf VARBINARY(MAX) NOT NULL,
+        nombre_pdf NVARCHAR(255) NULL,
+        content_type NVARCHAR(100) NOT NULL DEFAULT N'application/pdf',
+        fecha_alta DATETIME NOT NULL DEFAULT GETDATE(),
+        CONSTRAINT FK_InformeArchivo_Informe FOREIGN KEY (id_informe)
+            REFERENCES dbo.Informe(id_informe) ON DELETE CASCADE
+    );
+END
+GO
+
+-- Soft-delete flag on Muestra
+IF COL_LENGTH('dbo.Muestra', 'eliminada') IS NULL
+BEGIN
+    ALTER TABLE dbo.Muestra ADD eliminada BIT NOT NULL DEFAULT 0;
+END
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Muestra_eliminada' AND object_id = OBJECT_ID('dbo.Muestra'))
+    CREATE INDEX IX_Muestra_eliminada ON dbo.Muestra(eliminada);
+GO
+
 -- 0) Normalizar nombre de columna con carácter especial
 IF COL_LENGTH('dbo.Usuario', N'contraseña_hash') IS NOT NULL
 BEGIN
@@ -28,6 +56,47 @@ GO
 
 IF COL_LENGTH('dbo.Muestra', 'fecha_limite') IS NULL
     ALTER TABLE dbo.Muestra ADD fecha_limite DATE NULL;
+GO
+
+-- Añadir cédula (11 dígitos, única opcional) a Solicitante
+IF COL_LENGTH('dbo.Solicitante','cedula') IS NULL
+    ALTER TABLE dbo.Solicitante ADD cedula NVARCHAR(11) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_Solicitante_cedula')
+    CREATE UNIQUE INDEX UX_Solicitante_cedula ON dbo.Solicitante(cedula) WHERE cedula IS NOT NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_Solicitante_cedula_formato')
+    ALTER TABLE dbo.Solicitante WITH NOCHECK ADD CONSTRAINT CK_Solicitante_cedula_formato CHECK (cedula IS NULL OR (LEN(cedula)=11 AND cedula NOT LIKE '%[^0-9]%'));
+GO
+
+
+IF EXISTS (SELECT 1 FROM sys.columns WHERE name='cedula' AND object_id = OBJECT_ID('dbo.Solicitante'))
+   AND NOT EXISTS (SELECT 1 FROM dbo.Solicitante WHERE cedula IS NULL)
+   AND (SELECT is_nullable FROM sys.columns WHERE name='cedula' AND object_id = OBJECT_ID('dbo.Solicitante')) = 1
+BEGIN
+    ALTER TABLE dbo.Solicitante ALTER COLUMN cedula NVARCHAR(11) NOT NULL;
+END
+
+-- Redefinir sp_RegistrarSolicitante para aceptar cédula
+IF OBJECT_ID('dbo.sp_RegistrarSolicitante','P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_RegistrarSolicitante;
+GO
+CREATE PROCEDURE dbo.sp_RegistrarSolicitante
+    @nombre NVARCHAR(150),
+    @direccion NVARCHAR(255),
+    @contacto NVARCHAR(100),
+    @cedula NVARCHAR(11) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF (@cedula IS NOT NULL AND (LEN(@cedula)<>11 OR @cedula LIKE '%[^0-9]%'))
+    BEGIN
+        RAISERROR('Cédula inválida. Debe ser 11 dígitos numéricos.',16,1);
+        RETURN;
+    END
+    INSERT INTO dbo.Solicitante (nombre_razon_social, direccion, contacto, cedula)
+    VALUES (@nombre, @direccion, @contacto, @cedula);
+END;
 GO
 
 -- Trigger para asignar fecha_limite por defecto (p.ej., +5 días) si no se especifica
@@ -211,7 +280,6 @@ IF OBJECT_ID('dbo.sp_RegistrarMuestra', 'P') IS NOT NULL
     DROP PROCEDURE dbo.sp_RegistrarMuestra;
 GO
 CREATE PROCEDURE dbo.sp_RegistrarMuestra
-    @codigo NVARCHAR(50),
     @tipo NVARCHAR(50),
     @fecha DATE,
     @hora TIME,
@@ -223,13 +291,33 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO dbo.Muestra (codigo_unico, tipo, fecha_recepcion, hora_recepcion, origen, condiciones_transporte, id_solicitante, fecha_limite)
-    VALUES (@codigo, @tipo, @fecha, @hora, @origen, @condiciones, @id_solicitante, @fecha_limite);
+    SET XACT_ABORT ON;
+    DECLARE @pref NVARCHAR(4);
+    SET @pref = CASE @tipo WHEN N'Agua' THEN N'AG' WHEN N'Alimento' THEN N'AL' WHEN N'Bebida' THEN N'BE' ELSE N'MS' END;
+    DECLARE @yyyymmdd NVARCHAR(8) = CONVERT(CHAR(8), @fecha, 112);
+    DECLARE @seq INT;
+    DECLARE @codigo NVARCHAR(50);
 
-    -- Asignar estado inicial al historial
-    DECLARE @id_muestra INT = SCOPE_IDENTITY();
-    INSERT INTO dbo.HistorialEstadoMuestra (id_muestra, estado, comentario)
-    VALUES (@id_muestra, N'Recibida', N'Ingreso al sistema');
+    BEGIN TRAN;
+        -- Serializar lectura para evitar duplicados en concurrencia
+                -- Secuencia: soportar códigos legados cuyo final no es numérico (evitar error de conversión)
+                SELECT @seq = ISNULL(MAX(TRY_CONVERT(INT, RIGHT(codigo_unico, 4))), 0) + 1
+                FROM dbo.Muestra WITH (UPDLOCK, HOLDLOCK)
+                WHERE tipo = @tipo
+                    AND CONVERT(CHAR(8), fecha_recepcion, 112) = @yyyymmdd;
+
+        SET @codigo = @pref + N'-' + @yyyymmdd + N'-' + RIGHT('0000' + CAST(@seq AS NVARCHAR(10)), 4);
+
+        INSERT INTO dbo.Muestra (codigo_unico, tipo, fecha_recepcion, hora_recepcion, origen, condiciones_transporte, id_solicitante, fecha_limite)
+        VALUES (@codigo, @tipo, @fecha, @hora, @origen, @condiciones, @id_solicitante, @fecha_limite);
+
+        DECLARE @id_muestra INT = SCOPE_IDENTITY();
+        INSERT INTO dbo.HistorialEstadoMuestra (id_muestra, estado, comentario)
+        VALUES (@id_muestra, N'Recibida', N'Ingreso al sistema');
+    COMMIT TRAN;
+
+    -- Retornar identificadores generados
+    SELECT @id_muestra AS id_muestra, @codigo AS codigo_unico;
 END;
 GO
 
