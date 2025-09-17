@@ -118,4 +118,4 @@ App en `http://localhost:5173` (Vite).
 - Iframes sin token: añade `?token=<JWT>` a URLs de PDFs.
 
 ## Licencia
-MIT (ajusta según corresponda).
+MIT
