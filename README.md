@@ -11,7 +11,6 @@ Plataforma web para registro, evaluación y validación de muestras (agua, alime
 - Asignación de muestras a evaluadores y registro de ensayos/Resultados.
 - Generación de informes PDF (render a HTML con EJS -> PDF con Puppeteer, fallback PDFKit), guardados como VARBINARY en tabla `InformeArchivo`.
 - Descarga/visualización protegida de PDFs vía endpoint autenticado.
-- Soft-delete de muestras (campo `eliminada`) y listados que la ocultan.
 - Código de muestra generado automáticamente por tipo y fecha: `AG|AL|BE-yyyymmdd-####`.
 
 ## Requisitos
@@ -119,4 +118,4 @@ App en `http://localhost:5173` (Vite).
 - Iframes sin token: añade `?token=<JWT>` a URLs de PDFs.
 
 ## Licencia
-MIT (ajusta según corresponda).
+MIT
