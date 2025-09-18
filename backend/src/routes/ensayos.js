@@ -332,11 +332,27 @@ router.post(
       const id_informe = infoRs.recordset[0]?.id_informe;
 
       // Guardar PDF en base de datos (VARBINARY) si existe archivo
-    if (id_informe && pdfBuffer) {
+      if (id_informe && pdfBuffer) {
+        // Asegurar que sea un Buffer válido para MSSQL (evita "Invalid buffer")
+        let pdfBin
+        if (Buffer.isBuffer(pdfBuffer)) {
+          pdfBin = pdfBuffer
+        } else if (pdfBuffer instanceof Uint8Array) {
+          pdfBin = Buffer.from(pdfBuffer)
+        } else if (typeof pdfBuffer === 'string') {
+          // Detectar posible base64
+          const looksBase64 = /^[A-Za-z0-9+/=\r\n]+$/.test(pdfBuffer) && pdfBuffer.length > 100
+          pdfBin = Buffer.from(pdfBuffer, looksBase64 ? 'base64' : 'utf8')
+        } else {
+          throw new Error('PDF render returned unsupported type for buffer')
+        }
+        if (!pdfBin || pdfBin.length === 0) {
+          throw new Error('PDF buffer is empty')
+        }
         await pool
           .request()
           .input('id_informe', sql.Int, id_informe)
-      .input('contenido_pdf', sql.VarBinary(sql.MAX), pdfBuffer)
+          .input('contenido_pdf', sql.VarBinary(sql.MAX), pdfBin)
           .input('nombre_pdf', sql.NVarChar(255), filename)
           .query(`
             MERGE dbo.InformeArchivo AS tgt

@@ -60,6 +60,7 @@ function resolveBrowserExecutable() {
 }
 
 export async function generateInformePDF({ template = 'informe', data, outputPath, returnBuffer = false }) {
+  data = data || {}
   // Prepare QR as data URL if not present
   if (!data.qrDataUrl && data.qrText) {
     data.qrDataUrl = await QRCode.toDataURL(data.qrText)
@@ -81,8 +82,12 @@ export async function generateInformePDF({ template = 'informe', data, outputPat
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'load' })
     await page.emulateMediaType('screen')
-  const pdfBuffer = await page.pdf({ path: returnBuffer ? undefined : outputPath, format: 'A4', printBackground: true, margin: { top: '15mm', right: '12mm', bottom: '15mm', left: '12mm' } })
-  if (returnBuffer) return pdfBuffer
+    const pdfRaw = await page.pdf({ path: returnBuffer ? undefined : outputPath, format: 'A4', printBackground: true, margin: { top: '15mm', right: '12mm', bottom: '15mm', left: '12mm' } })
+    if (returnBuffer) {
+      // Puppeteer usually returns a Buffer; normalize defensively
+      const pdfBuffer = Buffer.isBuffer(pdfRaw) ? pdfRaw : Buffer.from(pdfRaw)
+      return pdfBuffer
+    }
   } finally {
     if (browser) await browser.close()
   }
