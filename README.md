@@ -106,7 +106,7 @@ Contributions are welcome! Here's how you can contribute to this project:
 
 1. **Fork the repository**
    ```bash
-   git clone https://github.com/cyberwarrior8/SistemaSalubridad.git
+   git clone https://github.com/your-username/SistemaSalubridad.git
    ```
 
 2. **Create a feature branch**
