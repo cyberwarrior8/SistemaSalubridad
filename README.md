@@ -1,148 +1,121 @@
 # Sistema Salubridad
 
-A web platform for registration, evaluation, and validation of samples (water, food, and beverages) with PDF report generation.
+Plataforma web para registro, evaluación y validación de muestras (agua, alimentos y bebidas) con generación de informes en PDF.
 
-## Project Overview
+- Backend: Node.js + Express + SQL Server (mssql), JWT auth, plantillas EJS + Puppeteer para PDF, almacenamiento de PDFs en Base de Datos.
+- Frontend: React + Vite.
+- Base de Datos: SQL Server con procedimientos almacenados y triggers auxiliares.
 
-Sistema Salubridad is a system designed to manage health and hygiene data efficiently. It provides a comprehensive solution for tracking and managing sample data, including water, food, and beverage samples, with features for evaluation workflows and PDF report generation.
+## Características clave
+- Registro de solicitantes con cédula única (11 dígitos), muestras y parámetros.
+- Asignación de muestras a evaluadores y registro de ensayos/Resultados.
+- Generación de informes PDF (render a HTML con EJS -> PDF con Puppeteer, fallback PDFKit), guardados como VARBINARY en tabla `InformeArchivo`.
+- Descarga/visualización protegida de PDFs vía endpoint autenticado.
+- Código de muestra generado automáticamente por tipo y fecha: `AG|AL|BE-yyyymmdd-####`.
 
-**Tech Stack:**
-- **Backend:** Node.js + Express + SQL Server (mssql), JWT authentication, EJS templates + Puppeteer for PDF generation, PDF storage in database
-- **Frontend:** React + Vite
-- **Database:** SQL Server with stored procedures and auxiliary triggers
-
-## Language Composition
-
-| Language   | Percentage |
-|------------|------------|
-| JavaScript | 63.1%      |
-| TSQL       | 29.8%      |
-| CSS        | 3.6%       |
-| EJS        | 3.3%       |
-| HTML       | 0.2%       |
-
-## Features
-
-- **Sample Registration:** Register applicants with unique ID (11-digit cedula), samples, and parameters
-- **Sample Assignment:** Assign samples to evaluators and record test results
-- **PDF Report Generation:** Generate PDF reports (HTML render with EJS → PDF with Puppeteer, fallback to PDFKit), stored as VARBINARY in `InformeArchivo` table
-- **Secure PDF Access:** Protected PDF download/viewing via authenticated endpoint
-- **Automatic Sample Codes:** Sample codes generated automatically by type and date: `AG|AL|BE-yyyymmdd-####`
-
-*Additional features and functionalities can be added here as the project evolves.*
-
-## Setup Instructions
-
-### Prerequisites
-
+## Requisitos
 - Node.js 18+
-- SQL Server 2019+ (or Azure SQL)
-- PowerShell (Windows) or Bash (Linux/macOS)
+- SQL Server 2019+ (o Azure SQL)
+- PowerShell (Windows) o Bash (Linux/macOS)
 
-### Repository Structure
+## Estructura del repositorio
+```
+backend/        API Express y lógica de negocio
+frontend/       Aplicación React (Vite)
+*.sql           Scripts de BD (creación, updates, seeds)
+```
+
+## Configuración de Base de Datos
+1) Crear BD y objetos iniciales:
+- Ejecuta `SistemaSalubridad-BD.sql` en tu instancia SQL Server para crear tablas básicas y SPs iniciales.
+
+2) Aplicar actualizaciones:
+- Ejecuta `DB-update.sql` para:
+  - Tabla `InformeArchivo` para PDFs (VARBINARY).
+  - Soft-delete `Muestra.eliminada` + índices.
+  - Triggers e historial de estados de muestra.
+  - Procedimiento `sp_RegistrarMuestra` con generación de `codigo_unico` automática y robustez ante códigos legados.
+  - Procedimiento `sp_RegistrarSolicitante` con `@cedula` (11 dígitos) y validación.
+
+3) Usuario/roles y parámetros (opcional):
+- Usa `backend/src/seed/seed.js` para sembrar roles/usuarios y parámetros base.
+
+## Variables de entorno (Backend)
+Crea `backend/.env` a partir de `.env.example` con:
 
 ```
-backend/        Express API and business logic
-frontend/       React application (Vite)
-*.sql           Database scripts (creation, updates, seeds)
-```
-
-### Database Configuration
-
-1. **Create database and initial objects:**
-   - Execute `SistemaSalubridad-BD.sql` on your SQL Server instance to create base tables and initial stored procedures.
-
-2. **Apply updates:**
-   - Execute `DB-update.sql` for:
-     - `InformeArchivo` table for PDFs (VARBINARY)
-     - Soft-delete `Muestra.eliminada` + indexes
-     - Triggers and sample status history
-     - `sp_RegistrarMuestra` procedure with automatic `codigo_unico` generation
-     - `sp_RegistrarSolicitante` procedure with `@cedula` (11 digits) and validation
-
-3. **Users/roles and parameters (optional):**
-   - Use `backend/src/seed/seed.js` to seed roles/users and base parameters.
-
-### Environment Variables (Backend)
-
-Create `backend/.env` from `.env.example` with:
-
-```env
 PORT=4000
-# MSSQL connection string (adjust instance/credentials)
+# Cadena de conexión MSSQL (ajusta instancia/credenciales)
 DB_SERVER=localhost\\MSSQLSERVER
 DB_DATABASE=SistemaSalubridad
 DB_USER=sa
-DB_PASSWORD=YourSecurePassword
+DB_PASSWORD=TuPasswordSeguro
 DB_ENCRYPT=false
-# Allowed CORS origins (comma-separated)
+# Orígenes permitidos para CORS (separados por coma)
 CORS_ORIGIN=http://localhost:5173
 # JWT
-JWT_SECRET=your_secure_key
+JWT_SECRET=una_llave_segura
 JWT_EXPIRES_IN=8h
 ```
 
-### Running the Application
-
-**Backend:**
-```bash
+## Puesta en marcha
+Backend:
+```powershell
 cd backend
 npm install
 npm run dev
 ```
-API available at `http://localhost:4000`.
+API disponible en `http://localhost:4000`.
 
-**Frontend:**
-```bash
+Frontend:
+```powershell
 cd frontend
 npm install
 npm run dev
 ```
-Application available at `http://localhost:5173` (Vite).
+App en `http://localhost:5173` (Vite).
 
-## Contributions
+## Autenticación y roles
+- Login: `POST /api/auth/login { correo, password }`
+- Roles soportados: "Registro de Datos", "Evaluador", "Validacion".
+- El frontend envía `Authorization: Bearer <token>`.
+- Para visualizar PDFs en iframes, el backend acepta `?token=<JWT>` en la URL.
 
-Contributions are welcome! Here's how you can contribute to this project:
+## Endpoints principales (resumen)
+- Solicitantes
+  - GET /api/solicitantes
+  - POST /api/solicitantes { nombre, direccion?, contacto?, cedula }
+- Muestras
+  - GET /api/muestras/pendientes | /en-analisis | /evaluadas | /validadas
+  - POST /api/muestras { tipo, fecha, hora, origen?, condiciones?, id_solicitante }
+  - POST /api/muestras/:id/asignar { id_evaluador, comentario? }
+  - DELETE /api/muestras/:id (soft-delete; solo estado=Recibida)
+- Ensayos (Evaluador)
+  - GET /api/ensayos/asignadas
+  - GET /api/ensayos/muestras/:id/parametros
+  - POST /api/ensayos { id_muestra, id_parametro, resultado, dentro_norma }
+  - POST /api/ensayos/muestras/:id/completar { apto? }
+- Informes
+  - GET /api/informes/muestra/:id
+  - GET /api/informes/muestra/:id/preview (autenticado)
+  - GET /api/informes/:id/pdf (stream desde DB)
+  - POST /api/informes/:id/validar { accion: Validado|Devuelto, comentario? }
 
-1. **Fork the repository**
-   ```bash
-   git clone https://github.com/your-username/SistemaSalubridad.git
-   ```
+## PDFs en Base de Datos
+- Generación en memoria (buffer) y guardado en `dbo.InformeArchivo`.
+- Descarga visualización: `/api/informes/:id/pdf?token=...`.
+- Sin dependencia de sistema de archivos; no se sirven rutas estáticas.
 
-2. **Create a feature branch**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
+## Notas de diseño
+- Soft-delete en `Muestra` controlado en listados; no se elimina físicamente.
+- Código de muestra auto-generado y seguro ante concurrencia.
+- Evaluador: botón "Guardar todos" para registrar en lote; solo guarda parámetros con resultado no vacío. El campo "Dentro de norma" se auto-marca según límites.
 
-3. **Make your changes and commit**
-   ```bash
-   git add .
-   git commit -m "Add your descriptive commit message"
-   ```
+## Troubleshooting
+- "Procedure expects @codigo": actualiza la BD con `DB-update.sql` para el `sp_RegistrarMuestra` nuevo.
+- "Conversion failed 'GU06'": ya manejado con `TRY_CONVERT` y filtro de patrón en el SP.
+- IDs con saltos: esperado por caché de IDENTITY; usa `codigo_unico` como folio visible.
+- Iframes sin token: añade `?token=<JWT>` a URLs de PDFs.
 
-4. **Push to your fork**
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-5. **Open a Pull Request**
-   - Go to the original repository
-   - Click "New Pull Request"
-   - Select your branch and submit
-
-### Contribution Guidelines
-
-- Follow existing code style and conventions
-- Write clear commit messages
-- Test your changes before submitting
-- Update documentation if needed
-
-## License
-
-This project is licensed under the **MIT License**.
-
-See the [LICENSE](LICENSE) file for more details.
-
----
-
-*For questions or support, please open an issue in the repository.*
+## Licencia
+MIT
