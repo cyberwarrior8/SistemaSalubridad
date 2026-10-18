@@ -52,6 +52,13 @@ async function ensureUser(pool, { nombre, correo, password, roles }) {
 }
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Seed is disabled in production');
+  }
+  const seedPassword = process.env.SEED_PASSWORD;
+  if (!seedPassword || seedPassword.length < 12) {
+    throw new Error('Set SEED_PASSWORD to a unique value of at least 12 characters before running the development seed');
+  }
   const pool = await getPool();
 
   const roleNames = ['Registro de Datos', 'Evaluador', 'Validacion'];
@@ -60,19 +67,19 @@ async function main() {
   await ensureUser(pool, {
     nombre: 'Registrador',
     correo: 'registrador@example.com',
-    password: 'Password!123',
+    password: seedPassword,
     roles: ['Registro de Datos']
   });
   await ensureUser(pool, {
     nombre: 'Evaluador',
     correo: 'evaluador@example.com',
-    password: 'Password!123',
+    password: seedPassword,
     roles: ['Evaluador']
   });
   await ensureUser(pool, {
     nombre: 'Validador',
     correo: 'validador@example.com',
-    password: 'Password!123',
+    password: seedPassword,
     roles: ['Validacion']
   });
 

@@ -5,7 +5,7 @@ import { authRequired, requireRoles } from '../middleware/auth.js';
 
 const router = Router();
 
-router.get('/', authRequired, async (req, res) => {
+router.get('/', authRequired, requireRoles('Validacion', 'Registro de Datos'), async (req, res) => {
   try {
     const pool = await getPool();
     const rs = await pool.request().query('SELECT TOP 100 * FROM Solicitante ORDER BY id_solicitante DESC');
@@ -29,7 +29,7 @@ router.post(
   }),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
 
   const { nombre, direccion, contacto, cedula } = req.body;
     try {

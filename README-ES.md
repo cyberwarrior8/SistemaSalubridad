@@ -78,8 +78,8 @@ App en `http://localhost:5173` (Vite).
 ## Autenticación y roles
 - Login: `POST /api/auth/login { correo, password }`
 - Roles soportados: "Registro de Datos", "Evaluador", "Validacion".
-- El frontend envía `Authorization: Bearer <token>`.
-- Para visualizar PDFs en iframes, el backend acepta `?token=<JWT>` en la URL.
+- La autenticación web usa una cookie `HttpOnly`, `Secure` en producción y controles CSRF para solicitudes que modifican datos.
+- Los PDFs se solicitan con la sesión autenticada; nunca se incluyen JWT en URLs.
 
 ## Endpoints principales (resumen)
 - Solicitantes
@@ -103,7 +103,7 @@ App en `http://localhost:5173` (Vite).
 
 ## PDFs en Base de Datos
 - Generación en memoria (buffer) y guardado en `dbo.InformeArchivo`.
-- Descarga visualización: `/api/informes/:id/pdf?token=...`.
+- Descarga/visualización: `/api/informes/:id/pdf` con la cookie de sesión.
 - Sin dependencia de sistema de archivos; no se sirven rutas estáticas.
 
 ## Notas de diseño
@@ -115,7 +115,7 @@ App en `http://localhost:5173` (Vite).
 - "Procedure expects @codigo": actualiza la BD con `DB-update.sql` para el `sp_RegistrarMuestra` nuevo.
 - "Conversion failed 'GU06'": ya manejado con `TRY_CONVERT` y filtro de patrón en el SP.
 - IDs con saltos: esperado por caché de IDENTITY; usa `codigo_unico` como folio visible.
-- Iframes sin token: añade `?token=<JWT>` a URLs de PDFs.
+- Para mostrar PDFs en el navegador, la interfaz solicita el archivo con su sesión y usa una URL temporal local.
 
 ## Licencia
 MIT

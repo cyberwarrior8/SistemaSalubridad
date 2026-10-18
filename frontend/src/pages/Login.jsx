@@ -15,7 +15,7 @@ export default function Login() {
     setError(null)
     try {
       const { data } = await api.post('/api/auth/login', { correo, password })
-  login(data.token)
+      login(data.user)
   navigate('/')
     } catch (err) {
       setError(err.response?.data?.message || 'Error')

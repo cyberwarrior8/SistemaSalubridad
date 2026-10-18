@@ -13,6 +13,41 @@ export default function Validacion() {
   const [validar, setValidar] = useState({ id_muestra: '', id_informe: '', accion: 'Validado', comentario: '' })
   const [informes, setInformes] = useState([])
   const [msg, setMsg] = useState('')
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState('')
+  const [pdfLoading, setPdfLoading] = useState(false)
+
+  async function openPdf(id) {
+    const { data } = await api.get(`/api/informes/${id}/pdf`, { responseType: 'blob' })
+    const url = URL.createObjectURL(data)
+    const link = document.createElement('a')
+    link.href = url
+    link.target = '_blank'
+    link.rel = 'noopener noreferrer'
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  }
+
+  useEffect(() => {
+    let objectUrl
+    if (!validar.id_informe) {
+      setPdfPreviewUrl('')
+      return undefined
+    }
+    setPdfLoading(true)
+    api.get(`/api/informes/${validar.id_informe}/pdf`, { responseType: 'blob' })
+      .then(({ data }) => {
+        objectUrl = URL.createObjectURL(data)
+        setPdfPreviewUrl(objectUrl)
+      })
+      .catch(() => {
+        setPdfPreviewUrl('')
+        setMsg('No se pudo cargar el PDF')
+      })
+      .finally(() => setPdfLoading(false))
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [validar.id_informe])
 
   async function refreshLists() {
     const p = await api.get('/api/muestras/pendientes')
@@ -179,11 +214,10 @@ export default function Validacion() {
                   <div style={{ marginBottom: 8 }}>Vista previa del PDF</div>
                   {(() => {
                     const inf = informes.find(i => String(i.id_informe) === String(validar.id_informe))
-                    const token = localStorage.getItem('token')
-                    const srcBase = inf?.download_url ? `${api.defaults.baseURL}${inf.download_url}` : null
-                    const src = srcBase ? (srcBase.includes('?') ? `${srcBase}&token=${encodeURIComponent(token || '')}` : `${srcBase}?token=${encodeURIComponent(token || '')}`) : null
-                    return src ? (
-                      <iframe title="informe" src={src} style={{ width: '100%', height: 400, border: 'none' }} />
+                    return inf?.download_url ? (
+                      pdfLoading ? <div className="muted">Cargando PDF…</div> : pdfPreviewUrl ? (
+                        <iframe title="informe" src={pdfPreviewUrl} style={{ width: '100%', height: 400, border: 'none' }} />
+                      ) : <div className="muted">PDF no disponible</div>
                     ) : (
                       <div className="muted">No hay PDF asociado</div>
                     )
@@ -261,11 +295,8 @@ export default function Validacion() {
                     <td>{i.fecha_creacion ? new Date(i.fecha_creacion).toLocaleString() : '—'}</td>
                     <td>
                       {(() => {
-                        const token = localStorage.getItem('token')
-                        const base = i.download_url ? `${api.defaults.baseURL}${i.download_url}` : null
-                        if (!base) return '—'
-                        const href = base.includes('?') ? `${base}&token=${encodeURIComponent(token || '')}` : `${base}?token=${encodeURIComponent(token || '')}`
-                        return <a href={href} target="_blank" rel="noreferrer">Ver PDF</a>
+                        if (!i.download_url) return '—'
+                        return <button type="button" className="btn" onClick={() => openPdf(i.id_informe)}>Ver PDF</button>
                       })()}
                     </td>
                   </tr>
@@ -320,11 +351,8 @@ export default function Validacion() {
                   <td>{m.tipo}</td>
                   <td>
                     {(() => {
-                      const token = localStorage.getItem('token')
-                      const base = m.id_informe ? `${api.defaults.baseURL}/api/informes/${m.id_informe}/pdf` : null
-                      if (!base) return '—'
-                      const href = base.includes('?') ? `${base}&token=${encodeURIComponent(token || '')}` : `${base}?token=${encodeURIComponent(token || '')}`
-                      return <a href={href} target="_blank" rel="noreferrer">Ver PDF</a>
+                      if (!m.id_informe) return '—'
+                      return <button type="button" className="btn" onClick={() => openPdf(m.id_informe)}>Ver PDF</button>
                     })()}
                   </td>
                 </tr>

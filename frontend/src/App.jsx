@@ -9,7 +9,8 @@ import { AuthProvider, useAuth } from './auth/AuthContext'
 import './styles.css'
 
 function ProtectedRoute({ children, roles }) {
-  const { user } = useAuth()
+  const { user, ready } = useAuth()
+  if (!ready) return null
   if (!user) return <Navigate to="/login" />
   if (roles && !roles.some(r => user.roles.includes(r))) return <Navigate to="/" />
   return children

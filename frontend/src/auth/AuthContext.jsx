@@ -1,39 +1,28 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { jwtDecode } from 'jwt-decode'
+import api from '../lib/api'
 
 const AuthCtx = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem('token'))
-  const [user, setUser] = useState(() => {
-    const t = localStorage.getItem('token')
-    if (!t) return null
-    try {
-      return jwtDecode(t)
-    } catch {
-      // token inválido o corrupto
-      localStorage.removeItem('token')
-      return null
-    }
-  })
+  const [user, setUser] = useState(null)
+  const [ready, setReady] = useState(false)
 
-  function login(t) {
-    localStorage.setItem('token', t)
-    setToken(t)
-    try {
-      setUser(jwtDecode(t))
-    } catch {
-      setUser(null)
-    }
+  useEffect(() => {
+    api.get('/api/auth/me')
+      .then(({ data }) => setUser(data.user))
+      .catch(() => setUser(null))
+      .finally(() => setReady(true))
+  }, [])
+
+  function login(nextUser) {
+    setUser(nextUser)
   }
 
-  function logout() {
-    localStorage.removeItem('token')
-    setToken(null)
-    setUser(null)
+  async function logout() {
+    try { await api.post('/api/auth/logout') } finally { setUser(null) }
   }
 
-  const value = { token, user, login, logout }
+  const value = { user, ready, login, logout }
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
 }
 

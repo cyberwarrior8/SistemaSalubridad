@@ -21,7 +21,7 @@ function parseTimeToDate(horaStr) {
 }
 
 // Listado básico de muestras
-router.get('/', authRequired, async (req, res) => {
+router.get('/', authRequired, requireRoles('Validacion', 'Registro de Datos'), async (req, res) => {
   try {
     const pool = await getPool();
   const rs = await pool.request().query('SELECT TOP 100 * FROM Muestra WHERE eliminada = 0 ORDER BY id_muestra DESC');
@@ -106,7 +106,7 @@ router.post(
   body('id_solicitante').isInt().withMessage('Solicitante inválido'),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
 
   const { tipo, fecha, hora, origen, condiciones, id_solicitante } = req.body;
 
@@ -149,14 +149,7 @@ router.post(
       if (err?.code === 'EPARAM') {
         return res.status(400).json({ message: 'Hora inválida (formato HH:mm)' });
       }
-      if (number === 2812) {
-        return res.status(500).json({ message: 'No se encontró el procedimiento almacenado sp_RegistrarMuestra' });
-      }
-      if (number === 229) {
-        return res.status(403).json({ message: 'Permiso denegado al ejecutar sp_RegistrarMuestra' });
-      }
-  const details = err?.originalError?.info?.message || err?.message;
-  res.status(500).json({ message: 'Error registrando muestra', code: number, details: process.env.NODE_ENV !== 'production' ? details : undefined });
+      res.status(500).json({ message: 'Error registrando muestra' });
     }
   }
 );
@@ -170,13 +163,29 @@ router.post(
   body('comentario').optional().isString(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
 
     const { id } = req.params;
     const { id_evaluador, comentario } = req.body;
 
     try {
       const pool = await getPool();
+      const eligible = await pool.request()
+        .input('id_usuario', sql.Int, id_evaluador)
+        .input('id_muestra', sql.Int, parseInt(id, 10))
+        .query(`
+          SELECT 1
+          FROM dbo.Usuario u
+          JOIN dbo.UsuarioRol ur ON ur.id_usuario = u.id_usuario
+          JOIN dbo.Rol r ON r.id_rol = ur.id_rol
+          JOIN dbo.Muestra m ON m.id_muestra = @id_muestra
+          WHERE u.id_usuario = @id_usuario AND u.estado = 1
+            AND r.nombre_rol = N'Evaluador' AND m.eliminada = 0
+            AND m.estado_actual = N'Recibida'
+        `);
+      if (eligible.recordset.length === 0) {
+        return res.status(400).json({ message: 'Muestra o evaluador no válido para asignación' });
+      }
       await pool
         .request()
         .input('id_muestra', sql.Int, parseInt(id, 10))
@@ -223,7 +232,7 @@ router.delete(
   param('id').isInt(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id = parseInt(req.params.id, 10);
 
     try {
@@ -243,8 +252,7 @@ router.delete(
       res.json({ message: 'Muestra eliminada (baja lógica)' });
     } catch (err) {
       console.error(err);
-      const number = err?.number || err?.originalError?.info?.number;
-      res.status(500).json({ message: 'Error eliminando lógicamente la muestra', code: number });
+      res.status(500).json({ message: 'Error eliminando lógicamente la muestra' });
     }
   }
 );

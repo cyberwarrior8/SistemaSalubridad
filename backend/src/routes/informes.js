@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { getPool, sql } from '../lib/db.js';
-import { upload } from '../middleware/upload.js';
+import { upload, isPdfBuffer } from '../middleware/upload.js';
 import path from 'path';
-import { authRequired, requireRoles } from '../middleware/auth.js';
+import { authRequired, requireRoles, evaluatorOwnsSample } from '../middleware/auth.js';
 import fs from 'fs';
 
 const router = Router();
@@ -89,7 +89,7 @@ async function buildInformePreviewData(id_muestra) {
   };
 }
 
-router.get('/', authRequired, async (req, res) => {
+router.get('/', authRequired, requireRoles('Validacion'), async (req, res) => {
   try {
     const pool = await getPool();
     const rs = await pool.request().query('SELECT TOP 100 * FROM Informe ORDER BY id_informe DESC');
@@ -104,13 +104,18 @@ router.get('/', authRequired, async (req, res) => {
 router.get(
   '/muestra/:id',
   authRequired,
+  requireRoles('Evaluador', 'Validacion'),
   param('id').isInt(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id_muestra = parseInt(req.params.id, 10);
     try {
       const pool = await getPool();
+      if (req.user.roles.includes('Evaluador') && !req.user.roles.includes('Validacion') &&
+          !await evaluatorOwnsSample(pool, id_muestra, req.user.sub)) {
+        return res.status(404).json({ message: 'Muestra no encontrada' });
+      }
       const rs = await pool
         .request()
         .input('id_muestra', sql.Int, id_muestra)
@@ -131,14 +136,20 @@ router.get(
 router.get(
   '/muestra/:id/preview',
   authRequired,
+  requireRoles('Evaluador', 'Validacion'),
   // Permitir tanto Evaluador como Validacion
   (req, res, next) => requireRoles('Evaluador', 'Validacion')(req, res, next),
   param('id').isInt(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id_muestra = parseInt(req.params.id, 10);
     try {
+      const pool = await getPool();
+      if (req.user.roles.includes('Evaluador') && !req.user.roles.includes('Validacion') &&
+          !await evaluatorOwnsSample(pool, id_muestra, req.user.sub)) {
+        return res.status(404).json({ message: 'Muestra no encontrada' });
+      }
       const data = await buildInformePreviewData(id_muestra);
       if (!data.muestra) return res.status(404).json({ message: 'Muestra no encontrada' });
       res.json(data);
@@ -156,7 +167,7 @@ router.get(
   param('id').isInt(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id_muestra = parseInt(req.params.id, 10);
     try {
       const data = await buildInformePreviewData(id_muestra);
@@ -179,13 +190,16 @@ router.post(
   body('ruta_pdf').isString(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
 
     const { id_muestra, ruta_pdf } = req.body;
     const id_evaluador = req.user.sub;
 
     try {
       const pool = await getPool();
+      if (!await evaluatorOwnsSample(pool, id_muestra, id_evaluador, ['En análisis'])) {
+        return res.status(404).json({ message: 'Muestra no encontrada o no asignada' });
+      }
       await pool
         .request()
         .input('id_muestra', sql.Int, id_muestra)
@@ -210,14 +224,18 @@ router.post(
   body('id_muestra').isInt(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-  if (!req.file) return res.status(400).json({ message: 'Archivo PDF requerido (campo "pdf")' });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
+    if (!req.file) return res.status(400).json({ message: 'Archivo PDF requerido (campo "pdf")' });
+    if (!isPdfBuffer(req.file.buffer)) return res.status(415).json({ message: 'El archivo no contiene una firma PDF válida' });
 
     const id_evaluador = req.user.sub;
     const id_muestra = parseInt(req.body.id_muestra, 10);
   const ruta_pdf = null;
     try {
       const pool = await getPool();
+      if (!await evaluatorOwnsSample(pool, id_muestra, id_evaluador, ['En análisis'])) {
+        return res.status(404).json({ message: 'Muestra no encontrada o no asignada' });
+      }
   await pool
         .request()
         .input('id_muestra', sql.Int, id_muestra)
@@ -225,14 +243,16 @@ router.post(
         .input('ruta_pdf', sql.NVarChar(255), ruta_pdf)
         .execute('sp_CrearInforme');
       // Guardar archivo en DB
-      const infoRs = await pool.request().query('SELECT TOP 1 id_informe FROM dbo.Informe WHERE id_muestra = '+id_muestra+' ORDER BY id_informe DESC');
+      const infoRs = await pool.request()
+        .input('id_muestra', sql.Int, id_muestra)
+        .query('SELECT TOP 1 id_informe FROM dbo.Informe WHERE id_muestra = @id_muestra ORDER BY id_informe DESC');
       const id_informe = infoRs.recordset[0]?.id_informe;
       if (id_informe && req.file?.buffer) {
         const buffer = req.file.buffer;
         await pool.request()
           .input('id_informe', sql.Int, id_informe)
           .input('contenido_pdf', sql.VarBinary(sql.MAX), buffer)
-          .input('nombre_pdf', sql.NVarChar(255), req.file.originalname || `upload_${Date.now()}.pdf`)
+          .input('nombre_pdf', sql.NVarChar(255), 'informe.pdf')
           .query(`
             MERGE dbo.InformeArchivo AS tgt
             USING (SELECT @id_informe AS id_informe) AS src
@@ -258,7 +278,7 @@ router.post(
   body('comentario').optional().isString(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
 
     const { id } = req.params;
     const { accion, comentario } = req.body;
@@ -301,13 +321,26 @@ router.post(
 router.get(
   '/:id/pdf',
   authRequired,
+  requireRoles('Evaluador', 'Validacion'),
   param('id').isInt(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id_informe = parseInt(req.params.id, 10);
     try {
       const pool = await getPool();
+      if (req.user.roles.includes('Evaluador') && !req.user.roles.includes('Validacion')) {
+        const owner = await pool.request().input('id_informe', sql.Int, id_informe).query(`
+          SELECT i.id_muestra
+          FROM dbo.Informe i
+          JOIN dbo.Muestra m ON m.id_muestra = i.id_muestra
+          WHERE i.id_informe = @id_informe AND m.eliminada = 0
+        `);
+        if (!owner.recordset[0] ||
+            !await evaluatorOwnsSample(pool, owner.recordset[0].id_muestra, req.user.sub)) {
+          return res.status(404).json({ message: 'Informe no encontrado' });
+        }
+      }
       const rs = await pool.request().input('id_informe', sql.Int, id_informe).query(`
         SELECT ia.contenido_pdf, ia.nombre_pdf, i.ruta_pdf
         FROM dbo.Informe i
@@ -316,8 +349,10 @@ router.get(
       `);
       const row = rs.recordset[0];
   if (row?.contenido_pdf) {
+        console.info(JSON.stringify({ event: 'report.downloaded', userId: req.user.sub, reportId: id_informe }));
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `inline; filename="${row.nombre_pdf || 'informe.pdf'}"`);
+        res.setHeader('Content-Disposition', 'inline; filename="informe.pdf"');
+        res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
         return res.end(row.contenido_pdf);
       }
       return res.status(404).json({ message: 'PDF no encontrado' });

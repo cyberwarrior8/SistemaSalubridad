@@ -20,7 +20,7 @@ router.get(
   query('q').optional().isString(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const tipo = (req.query.tipo || '').trim();
     const q = (req.query.q || '').trim();
     try {
@@ -59,7 +59,7 @@ router.post(
   body('unidad').optional().isString(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const { nombre, tipo_muestra, unidad } = req.body;
     try {
       const pool = await getPool();
@@ -92,7 +92,7 @@ router.put(
   body('unidad').optional().isString(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id = parseInt(req.params.id, 10);
     const { nombre, tipo_muestra, unidad } = req.body;
     try {
@@ -120,7 +120,7 @@ router.delete(
   param('id').isInt(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id = parseInt(req.params.id, 10);
     try {
       const pool = await getPool();
@@ -146,7 +146,7 @@ router.get(
   param('id').isInt(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id = parseInt(req.params.id, 10);
     try {
       const pool = await getPool();
@@ -182,7 +182,7 @@ router.put(
   body('fuente').optional({ nullable: true }).isString(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id = parseInt(req.params.id, 10);
     const { operador } = req.body;
     const limMin = req.body.limite_minimo === undefined ? null : Number(req.body.limite_minimo);

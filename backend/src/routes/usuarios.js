@@ -14,7 +14,7 @@ router.get(
   query('rol').isString().notEmpty(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
 
     const { rol } = req.query;
     try {
@@ -58,7 +58,7 @@ router.get(
   query('q').optional().isString(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const q = (req.query.q || '').trim();
     try {
       const pool = await getPool();
@@ -111,7 +111,7 @@ router.post(
   body('roles').isArray(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
 
     const { nombre, correo, password, roles } = req.body;
 
@@ -177,7 +177,7 @@ router.put(
   body('roles').isArray(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
 
     const id = parseInt(req.params.id, 10);
     const { nombre, correo, password, roles } = req.body;
@@ -242,7 +242,7 @@ router.delete(
   param('id').isInt(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id = parseInt(req.params.id, 10);
     try {
       const pool = await getPool();
@@ -263,7 +263,7 @@ router.post(
   param('id').isInt(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id = parseInt(req.params.id, 10);
     try {
       const pool = await getPool();

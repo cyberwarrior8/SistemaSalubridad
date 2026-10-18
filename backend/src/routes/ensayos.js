@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { getPool, sql } from '../lib/db.js';
-import { authRequired, requireRoles } from '../middleware/auth.js';
+import { authRequired, requireRoles, evaluatorOwnsSample } from '../middleware/auth.js';
 import fs from 'fs';
 import path from 'path';
 import PDFDocument from 'pdfkit';
@@ -47,16 +47,16 @@ router.get('/asignadas', authRequired, requireRoles('Evaluador'), async (req, re
       .request()
       .input('id_usuario', sql.Int, req.user.sub)
       .query(`
-        SELECT DISTINCT m.*, lb.comentario AS comentario_asignacion
+        SELECT m.*, lb.comentario AS comentario_asignacion
         FROM Muestra m
-        JOIN BitacoraMuestra b ON b.id_muestra = m.id_muestra AND b.id_usuario_responsable = @id_usuario
         OUTER APPLY (
-          SELECT TOP 1 comentario
+          SELECT TOP 1 id_usuario_responsable, comentario
           FROM BitacoraMuestra
-          WHERE id_muestra = m.id_muestra AND id_usuario_responsable = @id_usuario
+          WHERE id_muestra = m.id_muestra
           ORDER BY fecha_asignacion DESC, id_bitacora DESC
         ) lb
-  WHERE m.estado_actual = N'En análisis' AND m.eliminada = 0
+        WHERE m.estado_actual = N'En análisis' AND m.eliminada = 0
+          AND lb.id_usuario_responsable = @id_usuario
         ORDER BY m.id_muestra DESC;
       `);
     res.json(rs.recordset);
@@ -69,10 +69,13 @@ router.get('/asignadas', authRequired, requireRoles('Evaluador'), async (req, re
 // Parámetros sugeridos por tipo de muestra
 router.get('/muestras/:id/parametros', authRequired, requireRoles('Evaluador'), param('id').isInt(), async (req, res) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
   const id = parseInt(req.params.id, 10);
   try {
     const pool = await getPool();
+    if (!await evaluatorOwnsSample(pool, id, req.user.sub, ['En análisis'])) {
+      return res.status(404).json({ message: 'Muestra no encontrada o no asignada' });
+    }
   const tipoRs = await pool.request().input('id', sql.Int, id).query('SELECT tipo FROM Muestra WHERE id_muestra = @id AND eliminada = 0');
     const tipo = tipoRs.recordset[0]?.tipo;
     if (!tipo) return res.status(404).json({ message: 'Muestra no encontrada' });
@@ -149,13 +152,16 @@ router.post(
   body('dentro_norma').isBoolean(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
 
     const { id_muestra, id_parametro, resultado, dentro_norma } = req.body;
     const id_evaluador = req.user.sub;
 
     try {
       const pool = await getPool();
+      if (!await evaluatorOwnsSample(pool, id_muestra, id_evaluador, ['En análisis'])) {
+        return res.status(404).json({ message: 'Muestra no encontrada o no asignada' });
+      }
       await pool
         .request()
         .input('id_muestra', sql.Int, id_muestra)
@@ -181,10 +187,13 @@ router.get(
   param('id').isInt(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id_muestra = parseInt(req.params.id, 10);
     try {
       const pool = await getPool();
+      if (!await evaluatorOwnsSample(pool, id_muestra, req.user.sub, ['En análisis'])) {
+        return res.status(404).json({ message: 'Muestra no encontrada o no asignada' });
+      }
   const rs = await pool
         .request()
         .input('id_muestra', sql.Int, id_muestra)
@@ -217,13 +226,16 @@ router.post(
   body('apto').optional().isBoolean(),
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array().map(error => ({ field: error.path, message: error.msg })) });
     const id_muestra = parseInt(req.params.id, 10);
     const id_evaluador = req.user.sub;
     const apto = req.body.apto === undefined ? false : !!req.body.apto;
 
     try {
       const pool = await getPool();
+      if (!await evaluatorOwnsSample(pool, id_muestra, id_evaluador, ['En análisis'])) {
+        return res.status(404).json({ message: 'Muestra no encontrada o no asignada' });
+      }
 
     const eRs = await pool
         .request()
